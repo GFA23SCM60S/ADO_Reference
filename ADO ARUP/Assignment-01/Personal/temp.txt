@@ -1,0 +1,12 @@
+temp
+
+ // Open the file in read and write  mode
+    pageFile = fopen(fileName, "r+"); // can add a mode check here too*/
+
+
+    // file open failure check
+    if (pageFile == NULL) {
+        return RC_FILE_NOT_FOUND;
+    } 
+
+	return RC_OK; 
