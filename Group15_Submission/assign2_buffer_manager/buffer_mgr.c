@@ -27,13 +27,16 @@ typedef struct Bufferpool
 static RC flushDirtyPages(BM_BufferPool *const bm)
 {
     if (bm == NULL) {
+        printf("Error: [flushDirtyPages]: Buffer pool pointer is null.\n");
         return RC_ERROR;
     }
 
     Bufferpool *buffer = bm->mgmtData;
+    int totalPageCount = buffer->totalPages;
+    RC result;
 
     // iterate each pages in the buffer pool
-    for (int i = 0; i < buffer->totalPages; i++)
+    for (int i = 0; i < totalPageCount; i++)
     {
         // check if the status of the current page whether it is dirty or not
         if (buffer->bitdirty[i])
@@ -41,15 +44,13 @@ static RC flushDirtyPages(BM_BufferPool *const bm)
             int offset = i * PAGE_SIZE;
 
             // ensure the file capacity for write
-            RC result = ensureCapacity(buffer->pagenum[i] + 1, &buffer->fhl);
-            if (result != RC_OK)
+            if ((result = ensureCapacity(buffer->pagenum[i] + 1, &buffer->fhl)) != RC_OK)
             {
                 return result;
             }
 
             // write the dirty page to disk
-            result = writeBlock(buffer->pagenum[i], &buffer->fhl, buffer->pagedata + offset);
-            if (result != RC_OK)
+            if ((result = writeBlock(buffer->pagenum[i], &buffer->fhl, buffer->pagedata + offset))!= RC_OK)
             {
                 return RC_WRITE_FAILED;
             }
@@ -60,10 +61,11 @@ static RC flushDirtyPages(BM_BufferPool *const bm)
     return RC_OK;
 }
 
-static RC freeBufferPoolMemory(BM_BufferPool *const bm)
+static RC freeBufferPool(BM_BufferPool *const bm)
 
 {
     if (bm == NULL) {
+        printf("Error: [freeBufferPool]: Buffer pool pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -84,25 +86,29 @@ static RC freeBufferPoolMemory(BM_BufferPool *const bm)
 static void ShiftPageOrder(Bufferpool *bp, int start, int end, int newPageNum)
 {
     if (bp == NULL) {
+        printf("Error: [ShiftPageOrder]: Buffer pool pointer is null.\n");
         return;
     }
 
-    for (int i = start; i < end; i++)
+    int *sequence = bp->updatedOrder;
+    for (int i = start; i <= end; i++)
     {
-        bp->updatedOrder[i] = bp->updatedOrder[i + 1];
+        sequence[i] = sequence[i+1];
     }
-    bp->updatedOrder[end] = newPageNum;
+
+    sequence[end] = newPageNum;
 }
 
 static void UpdateBufferPoolStats(Bufferpool *bp, int memoryAddress, int pageNum)
 {
     if (bp == NULL) {
+        printf("Error: [UpdateBufferPoolStats]: Buffer pool pointer is null.\n");
         return;
     }
 
-    bp->pagenum[memoryAddress] = pageNum;
-    bp->numRead++;
     bp->fix_count[memoryAddress]++;
+    bp->numRead++;
+    bp->pagenum[memoryAddress] = pageNum;
 
     // mark the page as clean - not dirty
     bp->bitdirty[memoryAddress] = FALSE;
@@ -111,6 +117,7 @@ static void UpdateBufferPoolStats(Bufferpool *bp, int memoryAddress, int pageNum
 static void updateLRUOrder(Bufferpool *bp, PageNumber pageNum)
 {
     if (bp == NULL) {
+        printf("Error: [updateLRUOrder]: Buffer pool pointer is null.\n");
         return;
     }
 
@@ -126,6 +133,7 @@ static void updateLRUOrder(Bufferpool *bp, PageNumber pageNum)
                 break;
             }
         }
+
         if (swap_location != -1)
         {
             memmove(&bp->updatedOrder[swap_location], &bp->updatedOrder[swap_location + 1], (lastPosition - swap_location) * sizeof(bp->updatedOrder[0]));
@@ -134,32 +142,35 @@ static void updateLRUOrder(Bufferpool *bp, PageNumber pageNum)
     }
 }
 
-static RC findPageInBufferPool(Bufferpool *bp, BM_PageHandle *page, PageNumber pageNum, bool *foundedPage)
+static RC findPageInBufferPool(Bufferpool *bp, BM_PageHandle *page, PageNumber pageNum, bool *pageFound)
 {
     if (bp == NULL || page == NULL) {
+        printf(bp == NULL ? "Error: [findPageInBufferPool]: Buffer pool pointer is null.\n" : "Error: page handle pointer is null.\n");
         return RC_ERROR;
     }
 
-    int totalPages = bp->totalPages - bp->free_space;
-    for (int i = 0; i < totalPages; i++)
+    int memory_address = -1;
+    for (int i = 0; i < bp->totalPages - bp->free_space; i++)
     {
         if (bp->pagenum[i] == pageNum)
         {
             page->pageNum = pageNum;
-            int memory_address = i;
+            memory_address = i;
             bp->fix_count[memory_address]++;
             page->data = &bp->pagedata[memory_address * PAGE_SIZE];
-            *foundedPage = TRUE;
+            *pageFound = TRUE;
             updateLRUOrder(bp, pageNum);
             return RC_OK;
         }
     }
+
     return RC_IM_KEY_NOT_FOUND;
 }
 
 static RC addNewPageToBufferPool(Bufferpool *bp, BM_PageHandle *page, PageNumber pageNum)
 {
     if (bp == NULL || page == NULL) {
+        printf(bp == NULL ? "Error: [addNewPageToBufferPool]: Buffer pool pointer is null.\n" : "Error: page handle pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -179,12 +190,10 @@ static RC addNewPageToBufferPool(Bufferpool *bp, BM_PageHandle *page, PageNumber
 
     memcpy(bp->pagedata + record_pointer, page_handle, PAGE_SIZE);
     bp->free_space--;
-    bp->updatedOrder[memory_address] = pageNum;
-    bp->pagenum[memory_address] = pageNum;
     bp->numRead++;
     bp->fix_count[memory_address]++;
     bp->bitdirty[memory_address] = FALSE;
-    page->pageNum = pageNum;
+    bp->updatedOrder[memory_address] = bp->pagenum[memory_address] = page->pageNum = pageNum;
     page->data = &(bp->pagedata[record_pointer]);
 
     free(page_handle);
@@ -194,6 +203,7 @@ static RC addNewPageToBufferPool(Bufferpool *bp, BM_PageHandle *page, PageNumber
 static RC replacePage(Bufferpool *bp, BM_PageHandle *page, PageNumber pageNum)
 {
     if (bp == NULL || page == NULL) {
+        printf(bp == NULL ? "Error: [replacePage]: Buffer pool pointer is null.\n" : "Error: page handle pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -252,6 +262,7 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
     int rcode;
 
     if (bm == NULL || pageFileName == NULL) {
+        printf(bm == NULL ? "Error: [initBufferPool]: Buffer pool pointer is null.\n" : "Error: page filename pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -300,10 +311,12 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
 RC shutdownBufferPool(BM_BufferPool *const bm)
 {
     if (bm == NULL) {
+        printf("Error: [shutdownBufferPool]: Buffer pool pointer is null.\n");
         return RC_ERROR;
     }
 
     Bufferpool *buffer = bm->mgmtData;
+    RC result;
 
     // check if any page from the buff-pool, still in the use
     for (int i = 0; i < buffer->totalPages; i++)
@@ -315,10 +328,9 @@ RC shutdownBufferPool(BM_BufferPool *const bm)
     }
 
     // flush all dirty pages
-    RC status = flushDirtyPages(bm);
-    if (status != RC_OK)
+    if ((result = flushDirtyPages(bm))!= RC_OK)
     {
-        return status;
+        return result;
     }
 
     // close the file
@@ -328,7 +340,7 @@ RC shutdownBufferPool(BM_BufferPool *const bm)
     }
 
     // free the mem-pool
-    freeBufferPoolMemory(bm);
+    freeBufferPool(bm);
     return RC_OK;
 }
 
@@ -339,6 +351,7 @@ RC forceFlushPool(BM_BufferPool *const bm)
     int returnCode = RC_OK;
 
     if (bm == NULL) {
+        printf("Error: [forceFlushPool]: Buffer pool pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -382,6 +395,7 @@ RC forceFlushPool(BM_BufferPool *const bm)
 RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum)
 {
     if (bm == NULL || page == NULL) {
+        printf(bm == NULL ? "Error: [pinPage]: Buffer pool pointer is null.\n" : "Error: page handle pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -413,6 +427,7 @@ RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber 
 RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
 {
     if (bm == NULL || page == NULL) {
+        printf(bm == NULL ? "Error: [unpinPage]: Buffer pool pointer is null.\n" : "Error: page handle pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -438,6 +453,7 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
 RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page)
 {
     if (bm == NULL || page == NULL) {
+        printf(bm == NULL ? "Error: [markDirty]: Buffer pool pointer is null.\n" : "Error: page handle pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -458,6 +474,7 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page)
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page)
 {
     if (bm == NULL || page == NULL) {
+        printf(bm == NULL ? "Error: [forcePage]: Buffer pool pointer is null.\n" : "Error: page handle pointer is null.\n");
         return RC_ERROR;
     }
 
@@ -486,86 +503,72 @@ RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page)
 // Define fixed counts of the pages
 int *getFixCounts(BM_BufferPool *const bm)
 {
-    if (bm == NULL)
+    if (bm == NULL || bm->mgmtData == NULL)
     {
-        printf("Buffer pool pointer is null.\n");
+        printf(bm == NULL ? "Error: [getFixCounts]: Buffer pool pointer is null.\n" : "Error: Management data pointer is null.\n");
         return NULL;
     }
 
-    Bufferpool *pool = bm->mgmtData;
-    if (pool == NULL) {
-        printf("Error: Management data pointer is null.\n");
-        return NULL;
-    }
-
-    if (pool->free_space == pool->totalPages) {
+    Bufferpool *mgmtData = (Bufferpool *)bm->mgmtData;
+    if (mgmtData->free_space == mgmtData->totalPages) {
         static int noPagesInUse = 0;
         printf("No pages are currently in use. Fix counts are zero.\n");
         return &noPagesInUse;
     } else {
         printf("Returning the fix counts for pages that are currently in use.\n");
-        return pool->fix_count;
+        return mgmtData->fix_count;
     }
 }
 
 // Define the number of pages that have been read
 int getNumReadIO(BM_BufferPool *const bm)
 {
-    if (bm == NULL) {
+    if (bm == NULL || bm->mgmtData == NULL) {
+        printf(bm == NULL ? "Error: [getNumReadIO]: Buffer pool pointer is null.\n" : "Error: Management data pointer is null.\n");
         return 0;
     }
 
-    Bufferpool *pool = bm->mgmtData;
-    if (pool == NULL) {
-        return 0;
-    }
-
-    return pool->numRead;
+    // return the number of read
+    return ((Bufferpool *)bm->mgmtData)->numRead;
 }
 
 // Define the number of pages written
 int getNumWriteIO(BM_BufferPool *const bm)
 {
-    if (bm == NULL) {
+    if (bm == NULL || bm->mgmtData == NULL) {
+        printf(bm == NULL ? "Error: [getNumWriteIO]: Buffer pool pointer is null.\n" : "Error: Management data pointer is null.\n");
         return 0;
     }
 
-    Bufferpool *pool = bm->mgmtData;
-    if (pool == NULL) {
-        return 0;
-    }
-
-    return pool->numWrite;
+    // return the number of pages written
+    return ((Bufferpool *)bm->mgmtData)->numWrite;
 }
 
 // Define the page numbers as an array
 PageNumber *getFrameContents(BM_BufferPool *const bm)
 {
-    if (bm == NULL) {
+    if (bm == NULL || bm->mgmtData == NULL) {
+        printf(bm == NULL ? "Error: [getFrameContents]: Buffer pool pointer is null.\n" : "Error: Management data pointer is null.\n");
         return NULL;
     }
 
-    Bufferpool *pool = bm->mgmtData;
-    bool isBufferFull = (pool->free_space == pool->totalPages);
-    if (isBufferFull) {
+    Bufferpool *mgmtData = (Bufferpool *)bm->mgmtData;
+    if (mgmtData->free_space == mgmtData->totalPages) {
         return NULL;
-    } else {
-        return pool->pagenum;
     }
+
+    // return the page number
+    return mgmtData->pagenum;
 }
 
 // Define array of dirty page
 bool *getDirtyFlags(BM_BufferPool *const bm)
 {
-    if (bm == NULL) {
+    if (bm == NULL || bm->mgmtData == NULL) {
+        printf(bm == NULL ? "Error: [getDirtyFlags]: Buffer pool pointer is null.\n" : "Error: Management data pointer is null.\n");
         return NULL;
     }
 
-    Bufferpool *pool = bm->mgmtData;
-    if (pool == NULL) {
-        return NULL;
-    }
-
-    bool *flags = pool->bitdirty;
-    return flags;
+    // return the dirty flag
+    return ((Bufferpool *)bm->mgmtData)->bitdirty;
 }
