@@ -108,6 +108,126 @@ static void UpdateBufferPoolStats(Bufferpool *bp, int memoryAddress, int pageNum
     bp->bitdirty[memoryAddress] = FALSE;
 }
 
+static void updateLRUOrder(Bufferpool *buffer_pool, PageNumber pageNum)
+{
+    if (buffer_pool->updatedStrategy == RS_LRU)
+    {
+        int lastPosition = buffer_pool->totalPages - buffer_pool->free_space - 1;
+        int swap_location = -1;
+        for (int j = 0; j <= lastPosition; j++)
+        {
+            if (buffer_pool->updatedOrder[j] == pageNum)
+            {
+                swap_location = j;
+                break;
+            }
+        }
+        if (swap_location != -1)
+        {
+            memmove(&buffer_pool->updatedOrder[swap_location], &buffer_pool->updatedOrder[swap_location + 1], (lastPosition - swap_location) * sizeof(buffer_pool->updatedOrder[0]));
+            buffer_pool->updatedOrder[lastPosition] = pageNum;
+        }
+    }
+}
+
+static RC findPageInBufferPool(Bufferpool *buffer_pool, BM_PageHandle *page, PageNumber pageNum, bool *foundedPage)
+{
+    int totalPages = buffer_pool->totalPages - buffer_pool->free_space;
+    for (int i = 0; i < totalPages; i++)
+    {
+        if (buffer_pool->pagenum[i] == pageNum)
+        {
+            page->pageNum = pageNum;
+            int memory_address = i;
+            buffer_pool->fix_count[memory_address]++;
+            page->data = &buffer_pool->pagedata[memory_address * PAGE_SIZE];
+            *foundedPage = TRUE;
+            updateLRUOrder(buffer_pool, pageNum);
+            return RC_OK;
+        }
+    }
+    return RC_IM_KEY_NOT_FOUND;
+}
+
+static RC addNewPageToBufferPool(Bufferpool *buffer_pool, BM_PageHandle *page, PageNumber pageNum)
+{
+    SM_PageHandle page_handle = (SM_PageHandle)calloc(1, PAGE_SIZE);
+    if (page_handle == NULL)
+        return RC_MEMORY_ALLOCATION_FAIL;
+
+    int read_code = readBlock(pageNum, &buffer_pool->fhl, page_handle);
+    if (read_code < 0)
+    {
+        free(page_handle);
+        return RC_ERROR;
+    }
+
+    int memory_address = buffer_pool->totalPages - buffer_pool->free_space;
+    int record_pointer = memory_address * PAGE_SIZE;
+
+    memcpy(buffer_pool->pagedata + record_pointer, page_handle, PAGE_SIZE);
+    buffer_pool->free_space--;
+    buffer_pool->updatedOrder[memory_address] = pageNum;
+    buffer_pool->pagenum[memory_address] = pageNum;
+    buffer_pool->numRead++;
+    buffer_pool->fix_count[memory_address]++;
+    buffer_pool->bitdirty[memory_address] = FALSE;
+    page->pageNum = pageNum;
+    page->data = &(buffer_pool->pagedata[record_pointer]);
+
+    free(page_handle);
+    return RC_OK;
+}
+
+static RC replacePage(Bufferpool *buffer_pool, BM_PageHandle *page, PageNumber pageNum)
+{
+    SM_PageHandle page_handle = (SM_PageHandle)malloc(PAGE_SIZE);
+    if (page_handle == NULL)
+        return RC_MEMORY_ALLOCATION_FAIL;
+
+    memset(page_handle, 0, PAGE_SIZE);
+    int read_code = readBlock(pageNum, &buffer_pool->fhl, page_handle);
+
+    int memory_address = -1;
+    int swap_location = -1;
+    bool UpdatedStra_found = FALSE;
+
+    for (int j = 0; j < buffer_pool->totalPages && !UpdatedStra_found; j++)
+    {
+        int swap_page = buffer_pool->updatedOrder[j];
+        for (int i = 0; i < buffer_pool->totalPages; i++)
+        {
+            if (buffer_pool->pagenum[i] == swap_page && buffer_pool->fix_count[i] == 0)
+            {
+                memory_address = i;
+                if (buffer_pool->bitdirty[i])
+                {
+                    writeBlock(buffer_pool->pagenum[i], &buffer_pool->fhl, buffer_pool->pagedata + i * PAGE_SIZE);
+                    buffer_pool->numWrite++;
+                }
+                swap_location = j;
+                UpdatedStra_found = TRUE;
+                break;
+            }
+        }
+    }
+
+    if (!UpdatedStra_found)
+    {
+        free(page_handle);
+        return RC_BUFFERPOOL_FULL;
+    }
+
+    memcpy(buffer_pool->pagedata + memory_address * PAGE_SIZE, page_handle, PAGE_SIZE);
+    ShiftPageOrder(buffer_pool, swap_location, buffer_pool->totalPages - 1, pageNum);
+    UpdateBufferPoolStats(buffer_pool, memory_address, pageNum);
+    page->pageNum = pageNum;
+    page->data = buffer_pool->pagedata + memory_address * PAGE_SIZE;
+
+    free(page_handle);
+    return RC_OK;
+}
+
 // Define initBufferPool
 RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const int numPages, ReplacementStrategy strategy, void *stratData)
 {
@@ -239,181 +359,30 @@ RC forceFlushPool(BM_BufferPool *const bm)
     return returnCode;
 }
 
-// Define  pin a page
-RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page,
-           const PageNumber pageNum)
+RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum)
 {
-    Bufferpool *buffer_pool;
-    bool void_page = FALSE;
+    Bufferpool *buffer_pool = bm->mgmtData;
+    bool void_page = (buffer_pool->free_space == buffer_pool->totalPages);
     bool foundedPage = FALSE;
-    bool UpdatedStra_found = FALSE;
-    int read_code;
-    int record_pointer = -1;
-    int memory_address = -1;
-    int swap_location;
 
-    SM_PageHandle page_handle;
-    buffer_pool = bm->mgmtData;
-    buffer_pool = bm->mgmtData;
-
-    void_page = (buffer_pool->free_space == buffer_pool->totalPages) ? TRUE : void_page;
     if (!void_page)
     {
-        int totalPages = buffer_pool->totalPages - buffer_pool->free_space;
-        for (int i = 0; i < totalPages; i++)
-        {
-
-            if (buffer_pool->pagenum[i] == pageNum)
-            {
-                page->pageNum = pageNum;
-                int memory_address = i;
-                buffer_pool->fix_count[memory_address]++;
-                page->data = &buffer_pool->pagedata[memory_address * PAGE_SIZE];
-                foundedPage = TRUE;
-                if (buffer_pool->updatedStrategy == RS_LRU)
-                {
-                    int lastPosition = buffer_pool->totalPages - buffer_pool->free_space - 1;
-                    swap_location = -1;
-                    for (int j = 0; j <= lastPosition; j++)
-                        if (buffer_pool->updatedOrder[j] != pageNum)
-                        {
-                            if (j == buffer_pool->totalPages - 1)
-                            {
-                                swap_location = -1;
-                            }
-                        }
-                        else
-                        {
-                            swap_location = j;
-                            break;
-                        }
-                    if (swap_location != -1)
-                    {
-                        memmove(&buffer_pool->updatedOrder[swap_location], &buffer_pool->updatedOrder[swap_location + 1], (lastPosition - swap_location) * sizeof(buffer_pool->updatedOrder[0]));
-                        buffer_pool->updatedOrder[lastPosition] = pageNum;
-                    }
-                }
-                else
-                {
-                    int unutilized = 0;
-                    do
-                    {
-                        printf("This loop executes exactly once.\n");
-                    } while (++unutilized < 1);
-                }
-                return RC_OK;
-            }
-        }
+        RC result = findPageInBufferPool(buffer_pool, page, pageNum, &foundedPage);
+        if (result == RC_OK)
+            return RC_OK;
     }
 
-    if ((void_page == TRUE && buffer_pool != NULL) || (foundedPage != TRUE && buffer_pool->free_space > 0 && 
-        buffer_pool->free_space <= buffer_pool->totalPages && buffer_pool->totalPages != -1))
+    if (void_page || (buffer_pool->free_space > 0 && buffer_pool->free_space <= buffer_pool->totalPages))
     {
-        page_handle = (SM_PageHandle)calloc(1, PAGE_SIZE);
-        if (page_handle != NULL)
-        {
-
-            read_code = readBlock(pageNum, &buffer_pool->fhl, page_handle);
-            if (read_code >= 0)
-            {
-                size_t total_used_pages = buffer_pool->totalPages - buffer_pool->free_space;
-                memory_address = total_used_pages;
-                if (memory_address >= 0 && memory_address <= buffer_pool->totalPages)
-                {
-                    size_t base_address = 0;
-                    record_pointer = (memory_address * PAGE_SIZE) + base_address;
-                }
-            }
-        }
-        memcpy(buffer_pool->pagedata + record_pointer, page_handle, PAGE_SIZE);
-        buffer_pool->free_space--;
-        buffer_pool->updatedOrder[memory_address] = pageNum;
-        buffer_pool->pagenum[memory_address] = pageNum;
-        buffer_pool->numRead++;
-        buffer_pool->fix_count[memory_address]++;
-        buffer_pool->bitdirty[memory_address] = FALSE;
-        page->pageNum = pageNum;
-        page->data = &(buffer_pool->pagedata[record_pointer]);
-        free(page_handle);
-
-        return RC_OK;
+        return addNewPageToBufferPool(buffer_pool, page, pageNum);
     }
 
-    bool isPageNotFound = !foundedPage;
-    bool isBufferPoolValid = buffer_pool != NULL;
-    bool isBufferPoolFull = buffer_pool->free_space == 0;
-
-    if (isPageNotFound && isBufferPoolValid && isBufferPoolFull)
+    if (!foundedPage && buffer_pool->free_space == 0)
     {
-        UpdatedStra_found = FALSE;
-        page_handle = (SM_PageHandle)malloc(PAGE_SIZE);
-        if (page_handle != NULL)
-        {
-            memset(page_handle, 0, PAGE_SIZE);
-        }
-        read_code = readBlock(pageNum, &buffer_pool->fhl, page_handle);
-
-        if (buffer_pool->updatedStrategy == RS_FIFO || buffer_pool->updatedStrategy == RS_LRU)
-        {
-            int i = 0, j = 0;
-            do
-            {
-                int swap_page = buffer_pool->updatedOrder[j];
-                i = 0;
-                do
-                {
-                    if (buffer_pool->pagenum[i] == swap_page && buffer_pool->fix_count[i] == 0)
-                    {
-                        memory_address = i;
-                        record_pointer = i * PAGE_SIZE;
-                        if (buffer_pool->bitdirty[i])
-                        {
-                            read_code = ensureCapacity(buffer_pool->pagenum[i] + 1, &buffer_pool->fhl);
-                            read_code = writeBlock(buffer_pool->pagenum[i], &buffer_pool->fhl, buffer_pool->pagedata + record_pointer);
-                            buffer_pool->numWrite++;
-                        }
-                        swap_location = j;
-                        UpdatedStra_found = TRUE;
-                        break;
-                    }
-                    i++;
-                } while (i < buffer_pool->totalPages && !UpdatedStra_found);
-                j++;
-                if (UpdatedStra_found)
-                    break;
-            } while (j < buffer_pool->totalPages);
-        }
+        return replacePage(buffer_pool, page, pageNum);
     }
 
-    if (UpdatedStra_found == FALSE)
-    {
-        free(page_handle);
-        return RC_BUFFERPOOL_FULL;
-    }
-    else
-    {
-        record_pointer = memory_address * PAGE_SIZE;
-        int i = 0;
-        if (i < PAGE_SIZE)
-        {
-            do
-            {
-                buffer_pool->pagedata[i + record_pointer] = page_handle[i];
-                i++;
-            } while (i < PAGE_SIZE);
-        }
-    }
-
-    // Main logic
-    if (buffer_pool->updatedStrategy == RS_LRU || buffer_pool->updatedStrategy == RS_FIFO)
-    {
-        ShiftPageOrder(buffer_pool, swap_location, buffer_pool->totalPages - 1, pageNum);
-    }
-    UpdateBufferPoolStats(buffer_pool, memory_address, pageNum);
-    page->pageNum = pageNum;
-    page->data = buffer_pool->pagedata + record_pointer;
-    free(page_handle);
-    return RC_OK;
+    return RC_BUFFERPOOL_FULL;
 }
 
 // Define unpin a page
