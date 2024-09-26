@@ -251,7 +251,7 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
     Bufferpool *bp;
     int rcode;
 
-    if (bm == NULL) {
+    if (bm == NULL || pageFileName == NULL) {
         return RC_ERROR;
     }
 
@@ -412,7 +412,7 @@ RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber 
 // Define unpin a page
 RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
 {
-    if (bm == NULL) {
+    if (bm == NULL || page == NULL) {
         return RC_ERROR;
     }
 
@@ -437,7 +437,7 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
 // Define mark a page dirty
 RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page)
 {
-    if (bm == NULL) {
+    if (bm == NULL || page == NULL) {
         return RC_ERROR;
     }
 
@@ -457,7 +457,7 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page)
 // Define force a page
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page)
 {
-    if (bm == NULL) {
+    if (bm == NULL || page == NULL) {
         return RC_ERROR;
     }
 
