@@ -121,23 +121,39 @@ static void updateLRUOrder(Bufferpool *bp, PageNumber pageNum)
         return;
     }
 
-    if (bp->updatedStrategy == RS_LRU)
-    {
-        int lastPosition = bp->totalPages - bp->free_space - 1;
-        int swap_location = -1;
-        for (int j = 0; j <= lastPosition; j++)
-        {
-            if (bp->updatedOrder[j] == pageNum)
-            {
-                swap_location = j;
-                break;
-            }
-        }
+    // Track where the page is in the buffer pool
+    int lastPosition = bp->totalPages - bp->free_space - 1;
+    int pageIndex = -1;
 
-        if (swap_location > -1)
+    // Find the page in the current order
+    for (int i = 0; i <= lastPosition; i++)
+    {
+        if (bp->updatedOrder[i] == pageNum)
         {
-            memmove(&bp->updatedOrder[swap_location], &bp->updatedOrder[swap_location + 1], (lastPosition - swap_location) * sizeof(bp->updatedOrder[0]));
+            pageIndex = i;
+            break;
+        }
+    }
+
+    if (pageIndex != -1)
+    {
+        // Shift all elements after pageIndex up by 1 to fill the gap
+        memmove(&bp->updatedOrder[pageIndex], &bp->updatedOrder[pageIndex + 1], (lastPosition - pageIndex) * sizeof(bp->updatedOrder[0]));
+        bp->updatedOrder[lastPosition] = pageNum;
+    }
+    else
+    {
+        if (bp->free_space == 0)
+        {
+            int evictedPage = bp->updatedOrder[0];
+            memmove(&bp->updatedOrder[0], &bp->updatedOrder[1], lastPosition * sizeof(bp->updatedOrder[0]));
             bp->updatedOrder[lastPosition] = pageNum;
+        }
+        else
+        {
+            // if space is there, add the new page to the most recently used position
+            bp->updatedOrder[++lastPosition] = pageNum;
+            bp->free_space--;
         }
     }
 }
