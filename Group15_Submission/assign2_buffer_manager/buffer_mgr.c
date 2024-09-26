@@ -134,7 +134,7 @@ static void updateLRUOrder(Bufferpool *bp, PageNumber pageNum)
             }
         }
 
-        if (swap_location != -1)
+        if (swap_location > -1)
         {
             memmove(&bp->updatedOrder[swap_location], &bp->updatedOrder[swap_location + 1], (lastPosition - swap_location) * sizeof(bp->updatedOrder[0]));
             bp->updatedOrder[lastPosition] = pageNum;
@@ -257,14 +257,14 @@ static RC replacePage(Bufferpool *bp, BM_PageHandle *page, PageNumber pageNum)
 // Define initBufferPool
 RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const int numPages, ReplacementStrategy strategy, void *stratData)
 {
-    SM_FileHandle fh;
-    Bufferpool *bp;
-    int rcode;
-
     if (bm == NULL || pageFileName == NULL) {
         printf(bm == NULL ? "Error: [initBufferPool]: Buffer pool pointer is null.\n" : "Error: page filename pointer is null.\n");
         return RC_ERROR;
     }
+
+    SM_FileHandle fh;
+    Bufferpool *bp;
+    int rcode;
 
     if ((rcode = openPageFile((char *)pageFileName, &fh)) != RC_OK) {
         return rcode;
@@ -347,36 +347,34 @@ RC shutdownBufferPool(BM_BufferPool *const bm)
 // Define flush the bufferpool
 RC forceFlushPool(BM_BufferPool *const bm)
 {
-    Bufferpool *poolData;
-    int returnCode = RC_OK;
-
     if (bm == NULL) {
         printf("Error: [forceFlushPool]: Buffer pool pointer is null.\n");
         return RC_ERROR;
     }
 
-    poolData = bm->mgmtData;
+    int returnCode = RC_OK;
+    Bufferpool *poolData = bm->mgmtData;
 
     for (int index = 0; poolData != NULL && index < poolData->totalPages; index++)
     {
         if (poolData->fix_count[index] == 0 && poolData->bitdirty[index] == TRUE)
         {
             FILE *filePointer = fopen(poolData->fhl.fileName, "r+");
-            fseek(filePointer, 0, SEEK_END);
-            long currentSize = ftell(filePointer);
             long necessarySize = (poolData->pagenum[index] + 1) * PAGE_SIZE;
+            long currentSize = ftell(filePointer);
+            fseek(filePointer, 0, SEEK_END);
             if (currentSize < necessarySize)
             {
                 fseek(filePointer, necessarySize - 1, SEEK_SET);
                 fputc('\0', filePointer);
             }
 
-            int dataOffset = index * PAGE_SIZE;
             fseek(filePointer, poolData->pagenum[index] * PAGE_SIZE, SEEK_SET);
-            if (fwrite(poolData->pagedata + dataOffset, sizeof(char), PAGE_SIZE, filePointer) != PAGE_SIZE)
+            if (fwrite(poolData->pagedata + (index * PAGE_SIZE), sizeof(char), PAGE_SIZE, filePointer) != PAGE_SIZE)
             {
-                returnCode = RC_WRITE_FAILED;
                 fclose(filePointer);
+                printf("Error: fwrite failed");
+                returnCode = RC_WRITE_FAILED;
                 break;
             }
             fclose(filePointer);
@@ -441,10 +439,8 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
         }
     }
 
-    if (pageIndex != -1) {
-        if (pool->fix_count[pageIndex] > 0) {
-            pool->fix_count[pageIndex]--;
-        }
+    if (pageIndex != -1 && pool->fix_count[pageIndex] > 0) {
+        pool->fix_count[pageIndex]--;
     }
     return RC_OK;
 }
@@ -460,10 +456,8 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page)
     Bufferpool *pool = bm->mgmtData;
 
     for (int index = 0; index < pool->totalPages; index++) {
-        if (pool->pagenum[index] == page->pageNum) {
-            if (pool->bitdirty[index] != TRUE) {
-                pool->bitdirty[index] = TRUE;
-            }
+        if (pool->pagenum[index] == page->pageNum && pool->bitdirty[index] != TRUE) {
+            pool->bitdirty[index] = TRUE;
             break;
         }
     }
@@ -479,25 +473,19 @@ RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page)
     }
 
     Bufferpool *bufferPool = bm->mgmtData;
-    bool isPageLocated = FALSE;
 
     for (int index = 0; index < bufferPool->totalPages; index++) {
         if (bufferPool->pagenum[index] == page->pageNum) {
             int diskPosition = index * PAGE_SIZE;
-            printf("Writing page %d to disk at offset %d.\n", page->pageNum, diskPosition);
-            bufferPool->bitdirty[index] = FALSE;
             bufferPool->numWrite++;
-            isPageLocated = TRUE;
-            break;
+            bufferPool->bitdirty[index] = FALSE;
+            printf("Writing page %d to disk at offset %d.\n", page->pageNum, diskPosition);
+            return RC_OK;  // Return immediately upon finding the page
         }
     }
 
-    if (isPageLocated) {
-        return RC_OK;
-    } else {
-        printf("Unable to find page %d in the buffer pool.\n", page->pageNum);
-        return RC_WRITE_FAILED;
-    }
+    printf("Unable to find page %d in the buffer pool.\n", page->pageNum);
+    return RC_WRITE_FAILED;
 }
 
 // Define fixed counts of the pages
@@ -510,12 +498,13 @@ int *getFixCounts(BM_BufferPool *const bm)
     }
 
     Bufferpool *mgmtData = (Bufferpool *)bm->mgmtData;
+    static int noPagesInUse = -1;
     if (mgmtData->free_space == mgmtData->totalPages) {
-        static int noPagesInUse = 0;
-        printf("No pages are currently in use. Fix counts are zero.\n");
+        // no pages in use
+        noPagesInUse = 0;
         return &noPagesInUse;
     } else {
-        printf("Returning the fix counts for pages that are currently in use.\n");
+        // return fix count of pages that are in use
         return mgmtData->fix_count;
     }
 }
