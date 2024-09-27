@@ -416,6 +416,25 @@ RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber 
     Bufferpool *buffer_pool = bm->mgmtData;
     bool void_page = (buffer_pool->free_space == buffer_pool->totalPages);
     bool foundedPage = FALSE;
+    int pinnedPages = 0;
+
+    // Check if the page number is valid (non-negative)
+    if (pageNum < 0) {
+        printf("Error: [pinPage]: Negative page number.\n");
+        return RC_READ_NON_EXISTING_PAGE;
+    }
+
+    // Count how many pages are pinned (fix_count > 0)
+    for (int i = 0; i < buffer_pool->totalPages; i++) {
+        if (buffer_pool->fix_count[i] > 0) {
+            pinnedPages++;
+        }
+    }
+
+    if (pinnedPages == buffer_pool->totalPages) {
+        printf("All pages are pinned. Cannot pin more pages.\n");
+        return RC_BUFFERPOOL_FULL;
+    }
 
     if (!void_page)
     {
@@ -457,8 +476,10 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page)
 
     if (pageIndex != -1 && pool->fix_count[pageIndex] > 0) {
         pool->fix_count[pageIndex]--;
+        return RC_OK;
     }
-    return RC_OK;
+
+    return RC_ERROR;
 }
 
 // Define mark a page dirty
