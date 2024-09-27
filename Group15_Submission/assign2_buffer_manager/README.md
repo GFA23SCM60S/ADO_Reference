@@ -6,16 +6,19 @@ The Page Replacement functionality implements the strategies of FIFO (First In F
 
 File Structure
 =========================
-README.md : Contains a brief description of your solution and how to use it.
+README.md : Contains a brief description of the solution and how to use it.
 Makefile : Build file for compiling the project.
 buffer_mgr.h : Header file for buffer manager functions and data structures.
-buffer_mgr_stat.c : Source file for functions that print statistics about the buffer pool.
+buffer_mgr.c : Source file for buffer manager functions.
 buffer_mgr_stat.h : Header file for buffer manager statistics.
-dberror.c : Implementation of error handling functions.
+buffer_mgr_stat.c : Source file for functions that print statistics about the buffer pool.
 dberror.h : Header file for error handling.
+dberror.c : Implementation of error handling functions.
 dt.h : Data types file (boolean definitions and others).
 storage_mgr.h : Header file for storage manager (from assignment 1).
+storage_mgr.c : Source file for storage manager (from assignment 1).
 test_assign2_1.c : Test cases for buffer manager (FIFO and LRU strategies).
+test_assign2_2.c : Test cases for buffer manager (FIFO and LRU strategies).
 test_helper.h : Helper functions for the test program.
 
 Compilation and Execution
@@ -24,14 +27,12 @@ To compile and run the project, follow these steps:
 Ensure that all the necessary files are in the same directory (as listed above).
 Open a terminal or command prompt in this directory.
 Build the project using the provided Makefile by running:
-make
-The Makefile will compile the program and generate the test binaries. The expected output file will be named test_assign2_1 for the first set of tests.
+$ make
+The Makefile will compile the program and generate the test binaries. The expected output file will be named test1 and test2
 After successful compilation, execute the program with:
-./test_assign2_1
-This will run the test cases specified in test_assign2_1.c to validate the FIFO and LRU strategies for the Buffer Manager.
-
-
-
+$ ./test1
+$ ./test2
+This will run the test cases specified in test_assign2_1.c and test_assign2_2.c to validate the FIFO and LRU strategies for the Buffer Manager.
 
 Functionalities Included
 =========================
@@ -51,7 +52,7 @@ getNumWriteIO: Returns the number of write operations to disk since buffer pool 
 
 Testing
 =========================
-The test_assign2_1.c file contains tests for different functionalities of the Buffer Manager. Running the executable will execute these tests and output the results, indicating the success or failure of each test case.
+The test_assign2_1.c and test_assign2_2.c files contains tests for different functionalities of the Buffer Manager. Running the executable will execute these tests and output the results, indicating the success or failure of each test case.
 
 Requirements
 =========================
@@ -80,9 +81,3 @@ A Unix-like environment is required for running the `.c` and `.exe` files, espec
 - **Windows**: Use [Cygwin](https://www.cygwin.com/) or [WSL (Windows Subsystem for Linux)](https://docs.microsoft.com/en-us/windows/wsl/install) for a Unix-like environment.
 
 - **macOS** and most **Linux distributions** already provide a Unix-like environment.
-
-# Additional Notes
-- Ensure all file paths in the source code and commands are correctly set based on your directory structure. Relative paths are preferred for portability.
-- If modifications to the source files are necessary, understand the impact on other parts of the project. Testing is essential to ensure functionality remains intact.
-
-
