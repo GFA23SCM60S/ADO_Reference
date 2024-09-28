@@ -1,5 +1,3 @@
-Here's a more readable and organized version of the README file:
-
 # Buffer Manager Project
 
 ## Project Description
