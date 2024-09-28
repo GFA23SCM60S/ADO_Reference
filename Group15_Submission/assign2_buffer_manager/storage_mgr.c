@@ -164,17 +164,17 @@ RC readLastBlock(SM_FileHandle *fHandle, SM_PageHandle memPage) {
 }
 
 // HIGHLIGHT: Updated writeBlock function
-RC writeBlock(int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
+RC writeBlock(int pageNumber, SM_FileHandle *fHandle, SM_PageHandle memPage) {
     if (fHandle == NULL || memPage == NULL) {
         return RC_WRITE_FAILED;
     }
 
-    if (pageNum < 0) {
+    if (pageNumber < 0) {
         return RC_WRITE_FAILED;
     }
 
     FILE *file = fHandle->mgmtInfo;
-    long offset = (pageNum) * PAGE_SIZE;
+    long offset = (pageNumber) * PAGE_SIZE;
 
     if (fseek(file, offset, SEEK_SET) != 0) {
         return RC_WRITE_FAILED;
@@ -185,9 +185,9 @@ RC writeBlock(int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
         return RC_WRITE_FAILED;
     }
 
-    fHandle->curPagePos = pageNum;
-    if (pageNum >= fHandle->totalNumPages) {
-        fHandle->totalNumPages = pageNum + 1;
+    fHandle->curPagePos = pageNumber;
+    if (pageNumber >= fHandle->totalNumPages) {
+        fHandle->totalNumPages = pageNumber + 1;
     }
 
     return RC_OK;
