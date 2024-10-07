@@ -39,11 +39,11 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
 
     rcode = openPageFile((char *)pageFileName, &fh);
     if (rcode != RC_OK) {
-        return rcode; 
+        return rcode;
     }
     bp = (Bufferpool *)calloc(1, sizeof(Bufferpool));
     if (!bp) {
-        return RC_MEMORY_ALLOCATION_FAIL; 
+        return RC_MEMORY_ALLOCATION_FAIL;
     }
     bp->totalPages = numPages;
     bp->pagedata = (char *)calloc(numPages * PAGE_SIZE, sizeof(char));
@@ -60,7 +60,7 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
     bp->fix_count = (int *)calloc(numPages, sizeof(int));
     bp->updatedStrategy = strategy;
 
-   
+
 
     for (i = 0; i < numPages; i++) {
         bp->bitdirty[i] = FALSE;
@@ -80,7 +80,7 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
 
     if (bm != NULL) {
         if (pageFileName != NULL) {
-            bm->pageFile = strdup(pageFileName); 
+            bm->pageFile = strdup(pageFileName);
         } else {
             bm->pageFile = NULL;
         }
@@ -88,15 +88,15 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
         bm->strategy = strategy;
         bm->mgmtData = bp;
         if (bp != NULL) {
-        } 
-        } 
+        }
+        }
         return RC_OK;
     }
 
 // Define shutdown the buffer pool
 RC shutdownBufferPool(BM_BufferPool *const bm) {
     Bufferpool *bpl = bm->mgmtData;
-    
+
     for (int i = 0; i < bpl->totalPages; i++) {
         if (bpl->fix_count[i] != 0) {
             return RC_BUFFERPOOL_IN_USE;
@@ -104,13 +104,13 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
     }
     RC rc = writeDirtyPages(bm);
     if (rc != RC_OK) {
-        return rc; 
+        return rc;
     }
- 
+
     if (closePageFile(&bpl->fhl) != RC_OK) {
         return RC_CLOSE_FAILED;
     }
-    
+
     freeBufferPoolMemory(bm);
     return RC_OK;
 }
@@ -139,22 +139,22 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
 
     // Helper function
     static RC freeBufferPoolMemory(BM_BufferPool *const bm)
-                
+
             {
         if (bm != NULL) {
             Bufferpool *bpl = bm->mgmtData;
             if (bpl != NULL) {
                 if (bpl->updatedOrder != NULL) {
                     free(bpl->updatedOrder);
-                    bpl->updatedOrder = NULL; 
+                    bpl->updatedOrder = NULL;
                 }
                 if (bpl->pagenum != NULL) {
                     free(bpl->pagenum);
-                    bpl->pagenum = NULL; 
+                    bpl->pagenum = NULL;
                 }
                 if (bpl->bitdirty != NULL) {
                     free(bpl->bitdirty);
-                    bpl->bitdirty = NULL; 
+                    bpl->bitdirty = NULL;
                 }
                 if (bpl->fix_count != NULL) {
                     free(bpl->fix_count);
@@ -162,7 +162,7 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
                 }
                 if (bpl->pagedata != NULL) {
                     free(bpl->pagedata);
-                    bpl->pagedata = NULL; 
+                    bpl->pagedata = NULL;
                 }
                 free(bpl);
                 bm->mgmtData = NULL;
@@ -170,7 +170,7 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
             }
             return RC_OK;
         } else {
-            return RC_ERROR; 
+            return RC_ERROR;
         }
 
         return RC_OK;
@@ -202,11 +202,11 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
                 if (fwrite(bpl->pagedata + record_pointer, sizeof(char), PAGE_SIZE, file) != PAGE_SIZE) {
                     rcode = RC_WRITE_FAILED;
                     fclose(file);
-                    break; 
+                    break;
                 }
                 if (file != NULL) {
                     fclose(file);
-                    file = NULL; 
+                    file = NULL;
                 }
                 if (bpl != NULL) {
                     if (i >= 0) {
@@ -215,15 +215,15 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
                         (*bpl).numWrite++;
                     }
 
-                    } 
-                } 
+                    }
+                }
             }
         }
-        return rcode; 
+        return rcode;
     }
 
-    // Define  pin a page 
-RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page, 
+    // Define  pin a page
+RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
             const PageNumber pageNum)
     {
         Bufferpool *buffer_pool;
@@ -234,11 +234,11 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
         int record_pointer;
         int memory_address;
         int swap_location;
-        
+
         SM_PageHandle page_handle;
         buffer_pool=bm->mgmtData;
         buffer_pool = bm->mgmtData;
-        
+
         void_page = (buffer_pool->free_space == buffer_pool->totalPages) ? TRUE : void_page;
        if (!void_page) {
         int totalPages = buffer_pool->totalPages - buffer_pool->free_space;
@@ -251,9 +251,9 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
                 page->data = &buffer_pool->pagedata[memory_address * PAGE_SIZE];
                 foundedPage = TRUE;
                 if (buffer_pool->updatedStrategy == RS_LRU) {
-                        int lastPosition = buffer_pool->totalPages - buffer_pool->free_space - 1; 
-                        swap_location = -1; 
-                        for (int j = 0; j <= lastPosition; j++) 
+                        int lastPosition = buffer_pool->totalPages - buffer_pool->free_space - 1;
+                        swap_location = -1;
+                        for (int j = 0; j <= lastPosition; j++)
                             if (buffer_pool->updatedOrder[j] != pageNum) {
                                 if (j == buffer_pool->totalPages - 1) {
                                     swap_location = -1;
@@ -276,13 +276,13 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
                 return RC_OK;
             }
             }
-        } 
+        }
 
-        if ((void_page == TRUE && buffer_pool != NULL && (1 == 1)) || 
-        ((foundedPage != TRUE && foundedPage == FALSE) && buffer_pool->free_space > 0 && 
-        buffer_pool->free_space <= buffer_pool->totalPages && buffer_pool->free_space == buffer_pool->free_space && 
-        (buffer_pool->free_space != -1 && buffer_pool->totalPages != -1) && 
-        (buffer_pool->free_space >= 0 && buffer_pool->totalPages >= buffer_pool->free_space) && 
+        if ((void_page == TRUE && buffer_pool != NULL && (1 == 1)) ||
+        ((foundedPage != TRUE && foundedPage == FALSE) && buffer_pool->free_space > 0 &&
+        buffer_pool->free_space <= buffer_pool->totalPages && buffer_pool->free_space == buffer_pool->free_space &&
+        (buffer_pool->free_space != -1 && buffer_pool->totalPages != -1) &&
+        (buffer_pool->free_space >= 0 && buffer_pool->totalPages >= buffer_pool->free_space) &&
         ((buffer_pool->free_space + 1) > 1) && ((buffer_pool->totalPages - buffer_pool->free_space) >= 0)))
             {
         page_handle = (SM_PageHandle)calloc(1, PAGE_SIZE);
@@ -293,11 +293,11 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
                 size_t total_used_pages = buffer_pool->totalPages - buffer_pool->free_space;
                 memory_address = total_used_pages;
                 if (memory_address >= 0 && memory_address <= buffer_pool->totalPages) {
-                    size_t base_address = 0; 
+                    size_t base_address = 0;
                     record_pointer = (memory_address * PAGE_SIZE) + base_address;
 
-                } 
-            } 
+                }
+            }
         }
                 memcpy(buffer_pool->pagedata + record_pointer, page_handle, PAGE_SIZE);
                 buffer_pool->free_space--;
@@ -312,7 +312,7 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
 
                 return RC_OK;
             }
-       
+
             bool isPageNotFound = !foundedPage;
             bool isBufferPoolValid = buffer_pool != NULL;
             bool isBufferPoolFull = buffer_pool->free_space == 0;
@@ -331,7 +331,7 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
                 int i = 0, j = 0;
                 do {
                     int swap_page = buffer_pool->updatedOrder[j];
-                    i = 0; 
+                    i = 0;
                     do {
                         if (buffer_pool->pagenum[i] == swap_page && buffer_pool->fix_count[i] == 0) {
                             memory_address = i;
@@ -343,12 +343,12 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
                             }
                             swap_location = j;
                             UpdatedStra_found = TRUE;
-                            break; 
+                            break;
                         }
                         i++;
                     } while (i < buffer_pool->totalPages && !UpdatedStra_found);
                     j++;
-                    if (UpdatedStra_found) break; 
+                    if (UpdatedStra_found) break;
                 } while (j < buffer_pool->totalPages);
             }
         }
@@ -367,16 +367,16 @@ RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
                 } while (i < PAGE_SIZE);
             }
         }
-            
+
         // Main logic
         if (buffer_pool->updatedStrategy == RS_LRU || buffer_pool->updatedStrategy == RS_FIFO) {
             ShiftUpdatedOrder(swap_location, buffer_pool->totalPages - 1, buffer_pool, pageNum);
-        } 
+        }
         UpdateBufferPoolStats(buffer_pool, memory_address, pageNum);
         page->pageNum = pageNum;
         page->data = buffer_pool->pagedata + record_pointer;
-        free(page_handle); 
-        return RC_OK; 
+        free(page_handle);
+        return RC_OK;
 }
 
 static void ShiftUpdatedOrder(int start, int end, Bufferpool *bp, int newPageNum) {
@@ -392,37 +392,37 @@ static void UpdateBufferPoolStats(Bufferpool *bp, int memoryAddress, int pageNum
     bp->fix_count[memoryAddress] += 1;
     bp->bitdirty[memoryAddress] = FALSE;
 }
- 
-// Define unpin a page 
+
+// Define unpin a page
 RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
     Bufferpool *bufferPool = bm->mgmtData;
     int SearchResultIndex = -1;
     for (int i = 0; i < bufferPool->totalPages; i++) {
         if (bufferPool->pagenum[i] == page->pageNum) {
             SearchResultIndex = i;
-            break; 
+            break;
         }
     }
     if (SearchResultIndex != -1) {
         if (bufferPool->fix_count[SearchResultIndex] > 0) {
             bufferPool->fix_count[SearchResultIndex]--;
-        } 
-    } 
+        }
+    }
     return RC_OK;
 }
 
-// Define mark a page dirty 
+// Define mark a page dirty
 RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page) {
     Bufferpool *bpl;
-    int markedCount = 0; 
+    int markedCount = 0;
     bpl = bm->mgmtData;
     for (int i = 0; i < bpl->totalPages; i++) {
         if (bpl->pagenum[i] == page->pageNum) {
             if (bpl->bitdirty[i] != TRUE) {
-                bpl->bitdirty[i] = TRUE; 
-                markedCount++; 
+                bpl->bitdirty[i] = TRUE;
+                markedCount++;
             }
-            break; 
+            break;
         }
     }
     return RC_OK;
@@ -450,11 +450,11 @@ RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
     }
 }
 
-// Define fixed counts of the pages 
+// Define fixed counts of the pages
 int *getFixCounts (BM_BufferPool *const bm) {
     if (bm == NULL) {
         printf("Buffer pool pointer is null.\n");
-        return NULL; 
+        return NULL;
     }
     Bufferpool *bpl;
     bpl = bm->mgmtData;
@@ -463,7 +463,7 @@ int *getFixCounts (BM_BufferPool *const bm) {
         return NULL;
     }
     if (bpl->free_space == bpl->totalPages) {
-        static int noFixes = 0; 
+        static int noFixes = 0;
         printf("All pages are available. No fixes are present.\n");
         return &noFixes;
     } else {
@@ -472,7 +472,7 @@ int *getFixCounts (BM_BufferPool *const bm) {
     }
 }
 
-// Define the number of pages that have been read 
+// Define the number of pages that have been read
 int getNumReadIO (BM_BufferPool *const bm)
 {
     if (bm == NULL) {
@@ -487,7 +487,7 @@ int getNumReadIO (BM_BufferPool *const bm)
     return readCount;
 }
 
-// Define the number of pages written 
+// Define the number of pages written
 int getNumWriteIO(BM_BufferPool *const bm) {
     if (bm == NULL) {
         return 0;
@@ -503,7 +503,7 @@ int getNumWriteIO(BM_BufferPool *const bm) {
     }
 }
 
-// Define the page numbers as an array 
+// Define the page numbers as an array
 PageNumber *getFrameContents(BM_BufferPool *const bm)
 {
     Bufferpool *bpl;
@@ -524,11 +524,11 @@ PageNumber *getFrameContents(BM_BufferPool *const bm)
     }
     else
     {
-        return 0; 
+        return 0;
     }
 }
 
-// Define array of dirty page 
+// Define array of dirty page
 bool *getDirtyFlags(BM_BufferPool *const bm)
 {
     if (bm == NULL) {
@@ -545,4 +545,4 @@ bool *getDirtyFlags(BM_BufferPool *const bm)
     }
     return dirtyFlags;
 }
-        
+

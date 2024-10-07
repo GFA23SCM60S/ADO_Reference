@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS  = -g -Wall 
  
-default: test1
+default: test1 test2
 
 test1: test_assign2_1.o storage_mgr.o dberror.o buffer_mgr.o buffer_mgr_stat.o
 	$(CC) $(CFLAGS) -o test1 test_assign2_1.o storage_mgr.o dberror.o buffer_mgr.o buffer_mgr_stat.o -lm
