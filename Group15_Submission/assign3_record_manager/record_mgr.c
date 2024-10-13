@@ -8,6 +8,12 @@
 // Custom data structure to define the Record Manager.
 typedef struct RecordManager
 {
+	// total no of tuples in the table
+	int tuplesCount;
+	// stores the location of first free page which has empty slots in table
+	int freePage;
+	// This variable stores the count of the no of records scanned
+	int scanCount;
 	// PageHandle for using Buffer Manager to access the page files
 	BM_PageHandle pageHandle;
 	// Buffer Pool	
@@ -16,12 +22,6 @@ typedef struct RecordManager
 	RID recordID;
 	// condition for scanning the records in the table
 	Expr *condition;
-	// total no of tuples in the table
-	int tuplesCount;
-	// stores the location of first free page which has empty slots in table
-	int freePage;
-	// This variable stores the count of the no of records scanned
-	int scanCount;
 } RecordManager;
 
 const int maxNumberOfPages = 100;
