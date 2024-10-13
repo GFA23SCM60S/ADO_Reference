@@ -42,6 +42,11 @@ int getFreeSpace(char* data, int sizeOfRecord) {
 	return -1;
 }
 
+void writeIntToPage(void** pageHandle, int value) {
+    *(int*)(*pageHandle) = value;
+    *pageHandle = *pageHandle + sizeof(int);
+}
+
 extern RC initRecordManager (void *mgmtData)
 {
 	// Initiliazing Storage Manager
@@ -65,6 +70,11 @@ extern RC createTable (char *name, Schema *schema)
 	char *pageHandle = data;
 	SM_FileHandle fileHandle;
 
+    if (name == NULL || schema == NULL) {
+        printf(name == NULL ? "Error: [createTable]: name is null.\n" : "Error: schema pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Allocating memory space to the record manager custom data structure
 	recordManager = (RecordManager*) malloc(sizeof(RecordManager));
 
@@ -75,30 +85,23 @@ extern RC createTable (char *name, Schema *schema)
 	initBufferPool(&recordManager->bufferPool, name, maxNumberOfPages, RS_LRU, NULL);
 
 	// Setting pageHandle intial value
-	*(int*)pageHandle = 0;
-	pageHandle = pageHandle + sizeof(int);
-	*(int*)pageHandle = 1;
-	pageHandle = pageHandle + sizeof(int);
+	writeIntToPage(&pageHandle, 0);
+	writeIntToPage(&pageHandle, 1);
 
 	// Setting the number of attributes in pageHandle
-	*(int*)pageHandle = schema->numAttr;
-	pageHandle = pageHandle + sizeof(int); 
+    writeIntToPage(&pageHandle, schema->numAttr);
 
 	// Setting the Key Size of the attributes in pageHandle
-	*(int*)pageHandle = schema->keySize;
-	pageHandle = pageHandle + sizeof(int);
+    writeIntToPage(&pageHandle, schema->keySize);
 
 	for(int k = 0; k < schema->numAttr; k++){
 		// Setting attribute name and it's data type
 		strncpy(pageHandle, schema->attrNames[k], attributeSize);
 		pageHandle = pageHandle + attributeSize;
-
-		*(int*)pageHandle = (int)schema->dataTypes[k];
-		pageHandle = pageHandle + sizeof(int);
+        writeIntToPage(&pageHandle, (int)schema->dataTypes[k]);
 
 		// Setting length of datatype of the attribute
-		*(int*)pageHandle = (int) schema->typeLength[k];
-		pageHandle = pageHandle + sizeof(int);
+		writeIntToPage(&pageHandle, (int) schema->typeLength[k]);
     }
 
 	// Creating a page file as table name using the storage manager
@@ -133,6 +136,11 @@ extern RC openTable (RM_TableData *rel, char *name)
 	int attrCount;
 	SM_PageHandle pageHandle;
 	Schema *schema;
+
+    if (rel == NULL || name == NULL) {
+        printf(rel == NULL ? "Error: [openTable]: table data pointer is null.\n" : "Error: name is null.\n");
+        return RC_ERROR;
+    }
 
 	// Setting the meta data of the table and name
 	rel->mgmtData = recordManager;
@@ -197,6 +205,10 @@ extern RC openTable (RM_TableData *rel, char *name)
 
 extern RC closeTable (RM_TableData *rel)
 {
+    if (rel == NULL) {
+        printf("Error: [closeTable]: table data pointer is null.\n");
+        return RC_ERROR;
+    }
 	// Storing the table's meta data
 	RecordManager *recordManager = (*rel).mgmtData;
 	shutdownBufferPool(&recordManager->bufferPool);
@@ -206,6 +218,11 @@ extern RC closeTable (RM_TableData *rel)
 
 extern RC deleteTable (char *name)
 {
+    if (name == NULL) {
+        printf("Error: [deleteTable]: name of table is null.\n");
+        return RC_ERROR;
+    }
+
 	// Removing the page file from memory
 	destroyPageFile(name);
 	
@@ -214,12 +231,22 @@ extern RC deleteTable (char *name)
 
 extern int getNumTuples (RM_TableData *rel)
 {
+    if (rel == NULL) {
+        printf("Error: [getNumTuples]: table data pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Accessing our data structure's tuplesCount and returning it
 	RecordManager *recordManager = rel->mgmtData;
 	return recordManager->tuplesCount;
 }
 
 extern RC insertRecord (RM_TableData* rel, Record* record) {
+    if (rel == NULL || record == NULL) {
+        printf(rel == NULL ? "Error: [insertRecord]: table data pointer is null.\n" : "Error: record pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Set the reference ID for the new record
 	RecordManager *recordMngr = rel->mgmtData;	
 	RID *rID = &record->id; 
@@ -265,6 +292,11 @@ extern RC insertRecord (RM_TableData* rel, Record* record) {
 }
 
 extern RC deleteRecord (RM_TableData* rel, RID id) {
+    if (rel == NULL) {
+        printf("Error: [deleteRecord]: table data pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Pin page to prevent flushing and mark dirty before we are modifying it
 	RecordManager *recordMngr = rel->mgmtData;
 
@@ -285,6 +317,11 @@ extern RC deleteRecord (RM_TableData* rel, RID id) {
 }
 
 extern RC updateRecord (RM_TableData* rel, Record* record) {	
+    if (rel == NULL || record == NULL) {
+        printf(rel == NULL ? "Error: [updateRecord]: table data pointer is null.\n" : "Error: record pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Pin page to prevent flushing and mark dirty before we are modifying it
 	RecordManager *recordMngr = rel->mgmtData;
 
@@ -307,6 +344,11 @@ extern RC updateRecord (RM_TableData* rel, Record* record) {
 }
 
 extern RC getRecord (RM_TableData* rel, RID id, Record* record) {
+    if (rel == NULL || record == NULL) {
+        printf(rel == NULL ? "Error: [getRecord]: table data pointer is null.\n" : "Error: record pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Pin page to prevent flushing
 	RecordManager* recordMngr = rel->mgmtData;
 	pinPage(&recordMngr->bufferPool, &recordMngr->pageHandle, id.page);
@@ -329,6 +371,11 @@ extern RC getRecord (RM_TableData* rel, RID id, Record* record) {
 
 extern RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond)
 {
+    if (rel == NULL || scan == NULL) {
+        printf(rel == NULL ? "Error: [startScan]: table data pointer is null.\n" : "Error: scan pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// cond condition checking
 	if(cond != NULL){
 		// Opening the table
@@ -371,6 +418,11 @@ extern RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond)
 
 extern RC next (RM_ScanHandle *scan, Record *record)
 {
+    if (scan == NULL || record == NULL) {
+        printf(scan == NULL ? "Error: [next]: scan pointer is null.\n" : "Error: record pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Initiliazing scan data
 	RecordManager *tableManager = scan->rel->mgmtData;
 	RecordManager *scanManager = scan->mgmtData;
@@ -464,6 +516,11 @@ extern RC next (RM_ScanHandle *scan, Record *record)
 
 extern RC closeScan (RM_ScanHandle *scan)
 {
+    if (scan == NULL) {
+        printf("Error: [closeScan]: scan pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	RecordManager *scanManager = (*scan).mgmtData;
 	RecordManager *recordManager = (*scan).rel->mgmtData;
 
@@ -488,6 +545,11 @@ extern RC closeScan (RM_ScanHandle *scan)
 
 extern int getRecordSize (Schema *schema)
 {
+    if (schema == NULL) {
+        printf("Error: [getRecordSize]: schema pointer is null.\n");
+        return -1;
+    }
+
 	int length = 0, i; // Initial Value set to 0
 	
 	// Iterating the attributes of the schema
@@ -510,6 +572,11 @@ extern int getRecordSize (Schema *schema)
 
 extern Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys)
 {
+    if (attrNames == NULL || dataTypes == NULL) {
+        printf(attrNames == NULL ? "Error: [createSchema]: attrNames pointer is null.\n" : "Error: dataTypes pointer is null.\n");
+        return NULL;
+    }
+
 	// Allocate memory space to schema
 	Schema *tempSchema = (Schema *) malloc(sizeof(Schema));
 	//Setting the arguments in the schema
@@ -525,12 +592,21 @@ extern Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes,
 
 extern RC freeSchema (Schema *schema)
 {
+    if (schema == NULL) {
+        printf("Error: [freeSchema]: schema pointer is null.\n");
+        return RC_ERROR;
+    }
 	free(schema);
 	return RC_OK;
 }
 
 extern RC createRecord (Record **record, Schema *schema)
 {
+    if (record == NULL || schema == NULL) {
+        printf(record == NULL ? "Error: [createRecord]: record pointer is null.\n" : "Error: schema pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	// Allocate memory for the new record
 	Record *newRecord = (Record*) malloc(sizeof(Record));
 	
@@ -554,6 +630,11 @@ extern RC createRecord (Record **record, Schema *schema)
 
 RC attrOffset (Schema *schema, int attrNum, int *result)
 {
+    if (schema == NULL) {
+        printf("Error: [attrOffset]: schema pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	int i;
 	*result = 1;
 
@@ -578,6 +659,10 @@ RC attrOffset (Schema *schema, int attrNum, int *result)
 
 extern RC freeRecord (Record *record)
 {
+    if (record == NULL) {
+        printf("Error: [freeRecord]: record pointer is null.\n");
+        return RC_ERROR;
+    }
 	// De-allocating memory space allocated to record and freeing up that space
 	free(record);
 	return RC_OK;
@@ -585,6 +670,16 @@ extern RC freeRecord (Record *record)
 
 extern RC getAttr (Record *record, Schema *schema, int attrNum, Value **value)
 {
+    if (record == NULL || schema == NULL) {
+        printf(record == NULL ? "Error: [getAttr]: record pointer is null.\n" : "Error: schema pointer is null.\n");
+        return RC_ERROR;
+    }
+
+    if (value == NULL) {
+        printf("Error: [getAttr]: value pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	int varOffset = 0;
 
 	// Obtaining the attribute offset value based on the attribute number
@@ -653,6 +748,16 @@ extern RC getAttr (Record *record, Schema *schema, int attrNum, Value **value)
 
 extern RC setAttr (Record *record, Schema *schema, int attrNum, Value *value)
 {
+    if (record == NULL || schema == NULL) {
+        printf(record == NULL ? "Error: [setAttr]: record pointer is null.\n" : "Error: schema pointer is null.\n");
+        return RC_ERROR;
+    }
+
+    if (value == NULL) {
+        printf("Error: [setAttr]: value pointer is null.\n");
+        return RC_ERROR;
+    }
+
 	int varOffset = 0;
 
 	// Depending on the attribute number, obtaining the ofset value of the attributes
