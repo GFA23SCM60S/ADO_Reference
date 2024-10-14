@@ -527,26 +527,26 @@ extern RC closeScan (RM_ScanHandle *scan)
         return RC_ERROR;
     }
 
-	RecordManager *scanManager = (*scan).mgmtData;
-	RecordManager *recordManager = (*scan).rel->mgmtData;
+    // Retrieve scan manager and record manager
+    RecordManager *scanManager = scan->mgmtData;
+    RecordManager *recordManager = scan->rel->mgmtData;
 
-	// Scan Count check
-	if((*scanManager).scanCount > 0)
-	{
-		// Unpin the page from the buffer pool.
-		unpinPage(&recordManager->bufferPool, &scanManager->pageHandle);
-		
-		// Resetting the values
-		(*scanManager).recordID.page = 1;
-		(*scanManager).recordID.slot = 0;
-		(*scanManager).scanCount = 0;
-	}
-	
-	// Freeing the memory space allocated to scans's meta data
-	(*scan).mgmtData = NULL;
-	free((*scan).mgmtData);
-	
-	return RC_OK;
+    // Check if there are any scanned records
+    if (scanManager->scanCount > 0) {
+        // Unpin the page from the buffer pool
+        unpinPage(&recordManager->bufferPool, &scanManager->pageHandle);
+
+        // Reset scan manager values
+        scanManager->recordID.page = 1;
+        scanManager->recordID.slot = 0;
+        scanManager->scanCount = 0;
+    }
+
+    // Free the memory allocated for the scan manager
+    free(scan->mgmtData);
+    scan->mgmtData = NULL;
+
+    return RC_OK;
 }
 
 extern int getRecordSize (Schema *schema)
