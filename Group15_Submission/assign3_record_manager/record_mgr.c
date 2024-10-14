@@ -33,13 +33,13 @@ typedef struct RecordManager
 RecordManager *recordManager;
 
 /* helper functions */
-int getFreeSpace(char* data, int sizeOfRecord) {
-	for (int i = 0; i < PAGE_SIZE / sizeOfRecord; i++) {
-		if (!(data[i * sizeOfRecord] == '+')) {
-			return i;
-		}
-	}
-	return -1;
+int getFreeSpace(char* data, int recordSize) {
+    for (int i = 0; i < PAGE_SIZE / recordSize; i++) {
+        if (data[i * recordSize] != '+') {
+            return i;
+        }
+    }
+    return -1;
 }
 
 void writeIntToPage(void** pageHandle, int value) {
@@ -136,87 +136,61 @@ extern RC createTable (char *name, Schema *schema)
 	return RC_OK;
 }
 
-extern RC openTable (RM_TableData *rel, char *name)
+RC openTable(RM_TableData *table, char *tableName)
 {
-	int attrCount;
-	SM_PageHandle pageHandle;
-	Schema *schema;
+    int attributeCount;
+    SM_PageHandle pageHandle;
+    Schema *schema;
 
-    if (rel == NULL || name == NULL) {
-        printf(rel == NULL ? "Error: [openTable]: table data pointer is null.\n" : "Error: name is null.\n");
+    if (table == NULL || tableName == NULL) {
+        printf(table == NULL ? "Error: [openTable]: table data pointer is null.\n" : "Error: tableName is null.\n");
         return RC_ERROR;
     }
 
-	// Setting the meta data of the table and name
-	rel->mgmtData = recordManager;
-	rel->name = name;
-    
-	// Pinning a page using the Buffer Manager
-	pinPage(&recordManager->bufferPool, &recordManager->pageHandle, 0);
-	
-	// Setting the pointer intially to the 0th location
-	pageHandle = (char*) recordManager->pageHandle.data;
 
-	// Retrieving total no. of tuples from the page file
-	recordManager->tuplesCount= *(int*)pageHandle;
-	pageHandle = pageHandle + sizeof(int);
+    if (!table || !tableName) {
+        printf("Error: Invalid table or table name.\n");
+        return RC_ERROR;
+    }
 
-	// Retriving free page from the page file
-	recordManager->freePage= *(int*) pageHandle;
-    pageHandle = pageHandle + sizeof(int);
-	
-	// Retriving the number of attributes from the page file
-    attrCount = *(int*)pageHandle;
-	pageHandle = pageHandle + sizeof(int);
+    table->mgmtData = recordManager;
+    table->name = tableName;
 
-	// Allocating memory space in schema
-	schema = (Schema*) malloc(sizeof(Schema));
-	memset(schema, 0, sizeof(Schema));
-    
-	// Setting parameters of schema
-	schema->numAttr = attrCount;
-	schema->typeLength = (int*) malloc(sizeof(int) *attrCount);
-	memset(schema->typeLength, 0, sizeof(int) *attrCount);
-	schema->attrNames = (char**) malloc(sizeof(char*) *attrCount);
-	memset(schema->attrNames, 0, sizeof(char*) *attrCount);
-	schema->dataTypes = (DataType*) malloc(sizeof(DataType) *attrCount);
-	memset(schema->dataTypes, 0, sizeof(DataType) *attrCount);
-	// Allocate memory for storing attribute's name for each attribute
-	for(int k = 0; k < attrCount; k++) {
-		schema->attrNames[k]= (char*) malloc(attributeSize);
-		memset(schema->attrNames[k], 0, attributeSize);
-	}
-      
-	for(int k = 0; k < schema->numAttr; k++){
-		// Setting each attribute name and it's data type
-		if (strlen(pageHandle) >= attributeSize) {
-            printf("\n\n ERROR: [openTable]: attribute name is too long!!! \n\n");
-            return RC_ERROR;
-        }
+    pinPage(&recordManager->bufferPool, &recordManager->pageHandle, 0);
+    pageHandle = (char*) recordManager->pageHandle.data;
 
-		strncpy(schema->attrNames[k], pageHandle, attributeSize);
-		schema->attrNames[k][attributeSize - 1] = '\0';
-		pageHandle = pageHandle + attributeSize;
+    recordManager->tuplesCount = *(int*)pageHandle;
+    pageHandle += sizeof(int);
+    recordManager->freePage = *(int*)pageHandle;
+    pageHandle += sizeof(int);
 
-		schema->dataTypes[k]= *(int*) pageHandle;
-		pageHandle = pageHandle + sizeof(int);
+    attributeCount = *(int*)pageHandle;
+    pageHandle += sizeof(int);
 
-		// Setting length of datatype of the attribute
-		schema->typeLength[k]= *(int*)pageHandle;
-		pageHandle = pageHandle + sizeof(int);
-	}
-	
-	// Setting newly created schema to the table's schema
-	rel->schema = schema;	
+    schema = (Schema*) malloc(sizeof(Schema));
+    memset(schema, 0, sizeof(Schema));
+    schema->numAttr = attributeCount;
+    schema->typeLength = (int*) malloc(sizeof(int) * attributeCount);
+    schema->attrNames = (char**) malloc(sizeof(char*) * attributeCount);
+    schema->dataTypes = (DataType*) malloc(sizeof(DataType) * attributeCount);
 
-	// Unpinning the page from Buffer Pool
-	unpinPage(&recordManager->bufferPool, &recordManager->pageHandle);
+    for (int i = 0; i < attributeCount; i++) {
+        schema->attrNames[i] = (char*) malloc(attributeSize);
+        strncpy(schema->attrNames[i], pageHandle, attributeSize);
+        schema->attrNames[i][attributeSize - 1] = '\0';
+        pageHandle += attributeSize;
+        schema->dataTypes[i] = *(int*) pageHandle;
+        pageHandle += sizeof(int);
+        schema->typeLength[i] = *(int*)pageHandle;
+        pageHandle += sizeof(int);
+    }
 
-	// Write the page back to disk
-	forcePage(&recordManager->bufferPool, &recordManager->pageHandle);
+    table->schema = schema;
+    unpinPage(&recordManager->bufferPool, &recordManager->pageHandle);
+    forcePage(&recordManager->bufferPool, &recordManager->pageHandle);
 
-	return RC_OK;
-}   
+    return RC_OK;
+}
 
 extern RC closeTable (RM_TableData *rel)
 {
@@ -256,132 +230,101 @@ extern int getNumTuples (RM_TableData *rel)
 	return recordManager->tuplesCount;
 }
 
-extern RC insertRecord (RM_TableData* rel, Record* record) {
-    if (rel == NULL || record == NULL) {
-        printf(rel == NULL ? "Error: [insertRecord]: table data pointer is null.\n" : "Error: record pointer is null.\n");
+RC insertRecord(RM_TableData* table, Record* record) {
+    if (!table || !record) {
+        printf("Error: Invalid table or record.\n");
         return RC_ERROR;
     }
 
-	// Set the reference ID for the new record
-	RecordManager *recordMngr = rel->mgmtData;	
-	RID *rID = &record->id; 
-	
-	// Pin the page
-	rID->page = recordMngr->freePage;
-	int rSize = getRecordSize(rel->schema);
-	pinPage(&recordMngr->bufferPool, &recordMngr->pageHandle, rID->page);
-	
-	// Set the memory position for the record
-	char* auxPointer = recordMngr->pageHandle.data;
+    RecordManager *manager = table->mgmtData;
+    RID *recordID = &record->id;
+    recordID->page = manager->freePage;
+    int recordSize = getRecordSize(table->schema);
 
-	// Find the free slot
-	while((rID->slot = getFreeSpace(auxPointer, rSize)) == -1) {
-		// If no free slots, change the page
-		unpinPage(&recordMngr->bufferPool, &recordMngr->pageHandle);	
-		rID->page++;
-		pinPage(&recordMngr->bufferPool, &recordMngr->pageHandle, rID->page);
-		
-		// Update the start of data		
-		auxPointer = recordMngr->pageHandle.data;
-	}
-	// Now the page is dirty
-	markDirty(&recordMngr->bufferPool, &recordMngr->pageHandle);
-	
-	// Set the memory position for the record
-	auxPointer += (rID->slot * rSize);
+    pinPage(&manager->bufferPool, &manager->pageHandle, recordID->page);
+    char* dataPointer = manager->pageHandle.data;
 
-	// Tombstone method
-	*auxPointer = '+';
+    while ((recordID->slot = getFreeSpace(dataPointer, recordSize)) == -1) {
+        unpinPage(&manager->bufferPool, &manager->pageHandle);
+        recordID->page++;
+        pinPage(&manager->bufferPool, &manager->pageHandle, recordID->page);
+        dataPointer = manager->pageHandle.data;
+    }
 
-	// Copy the rest of the record to the next space
-	memcpy(auxPointer+1, record->data + 1, rSize - 1);
+    markDirty(&manager->bufferPool, &manager->pageHandle);
+    dataPointer += (recordID->slot * recordSize);
+    *dataPointer = '+';
+    memcpy(dataPointer + 1, record->data + 1, recordSize - 1);
 
-	// Unpinning, update the quantity of records and pin
-	unpinPage(&recordMngr->bufferPool, &recordMngr->pageHandle);
+    unpinPage(&manager->bufferPool, &manager->pageHandle);
+    manager->tuplesCount++;
+    pinPage(&manager->bufferPool, &manager->pageHandle, 0);
 
-	recordMngr->tuplesCount++;
-
-	pinPage(&recordMngr->bufferPool, &recordMngr->pageHandle, 0);
-
-	return RC_OK;
+    return RC_OK;
 }
 
-extern RC deleteRecord (RM_TableData* rel, RID id) {
-    if (rel == NULL) {
-        printf("Error: [deleteRecord]: table data pointer is null.\n");
+RC deleteRecord(RM_TableData* table, RID id) {
+    if (!table) {
+        printf("Error: Invalid table.\n");
         return RC_ERROR;
     }
 
-	// Pin page to prevent flushing and mark dirty before we are modifying it
-	RecordManager *recordMngr = rel->mgmtData;
+    RecordManager *manager = table->mgmtData;
+    pinPage(&manager->bufferPool, &manager->pageHandle, id.page);
+    markDirty(&manager->bufferPool, &manager->pageHandle);
 
-	pinPage(&recordMngr->bufferPool, &recordMngr->pageHandle, id.page);
+    int recordSize = getRecordSize(table->schema);
+    char* dataPointer = manager->pageHandle.data + (id.slot * recordSize);
+    *dataPointer = '-';
 
-	markDirty(&recordMngr->bufferPool, &recordMngr->pageHandle);
+    manager->freePage = id.page;
+    unpinPage(&manager->bufferPool, &manager->pageHandle);
 
-	// Point to character
-	int rSize = getRecordSize(rel->schema);
-	char* dataP = recordMngr->pageHandle.data + (id.slot * rSize);
-	*dataP = '-';
-	// Set free page id
-	recordMngr->freePage = id.page;
-
-	// Free page from pin / Unpin
-	unpinPage(&recordMngr->bufferPool, &recordMngr->pageHandle);
-	return RC_OK;
+    return RC_OK;
 }
 
-extern RC updateRecord (RM_TableData* rel, Record* record) {	
-    if (rel == NULL || record == NULL) {
-        printf(rel == NULL ? "Error: [updateRecord]: table data pointer is null.\n" : "Error: record pointer is null.\n");
+RC updateRecord(RM_TableData* table, Record* record) {
+    if (!table || !record) {
+        printf("Error: Invalid table or record.\n");
         return RC_ERROR;
     }
 
-	// Pin page to prevent flushing and mark dirty before we are modifying it
-	RecordManager *recordMngr = rel->mgmtData;
+    RecordManager *manager = table->mgmtData;
+    pinPage(&manager->bufferPool, &manager->pageHandle, record->id.page);
+    markDirty(&manager->bufferPool, &manager->pageHandle);
 
-	pinPage(&recordMngr->bufferPool, &recordMngr->pageHandle, record->id.page);
+    int recordSize = getRecordSize(table->schema);
+    char* dataPointer = manager->pageHandle.data + (record->id.slot * recordSize);
+    *dataPointer = '+';
+    memcpy(dataPointer + 1, record->data + 1, recordSize - 1);
 
-	markDirty(&recordMngr->bufferPool, &recordMngr->pageHandle);
+    unpinPage(&manager->bufferPool, &manager->pageHandle);
 
-	// Point to character
-	int rSize = getRecordSize(rel->schema);
-	RID id = record->id;
-	char* dataP = recordMngr->pageHandle.data + (id.slot * rSize);
-	
-	*dataP = '+';
-	// Set data
-	memcpy(dataP+1, record->data + 1, rSize - 1 );
-	
-	// Free page from pin / Unpin
-	unpinPage(&recordMngr->bufferPool, &recordMngr->pageHandle);
-	return RC_OK;	
+    return RC_OK;
 }
 
-extern RC getRecord (RM_TableData* rel, RID id, Record* record) {
-    if (rel == NULL || record == NULL) {
-        printf(rel == NULL ? "Error: [getRecord]: table data pointer is null.\n" : "Error: record pointer is null.\n");
+RC getRecord(RM_TableData* table, RID id, Record* record) {
+    if (!table || !record) {
+        printf("Error: Invalid table or record.\n");
         return RC_ERROR;
     }
 
-	// Pin page to prevent flushing
-	RecordManager* recordMngr = rel->mgmtData;
-	pinPage(&recordMngr->bufferPool, &recordMngr->pageHandle, id.page);
+    RecordManager* manager = table->mgmtData;
+    pinPage(&manager->bufferPool, &manager->pageHandle, id.page);
 
-	// Point to character
-	int rSize = getRecordSize(rel->schema);
-	char* dataP = recordMngr->pageHandle.data + (id.slot * rSize);
-	
-	if(*dataP != '+') {
-		return RC_RM_NO_TUPLE_WITH_GIVEN_RID;
-	}
-	// Get data
-	record->id = id;
-	char* data = record->data;
-	memcpy(++data, dataP + 1, rSize - 1);
-	// Free page from pin / Unpin
-	unpinPage(&recordMngr->bufferPool, &recordMngr->pageHandle);
-	return RC_OK;
+    int recordSize = getRecordSize(table->schema);
+    char* dataPointer = manager->pageHandle.data + (id.slot * recordSize);
+
+    if (*dataPointer != '+') {
+        return RC_RM_NO_TUPLE_WITH_GIVEN_RID;
+    }
+
+    record->id = id;
+    memcpy(record->data + 1, dataPointer + 1, recordSize - 1);
+
+    unpinPage(&manager->bufferPool, &manager->pageHandle);
+
+    return RC_OK;
 }
 
 extern RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond)
@@ -424,48 +367,36 @@ extern RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond)
     }
 }
 
-extern RC next(RM_ScanHandle *scan, Record *record) {
-    // Validate input parameters
+RC next(RM_ScanHandle *scan, Record *record) {
     if (!scan || !record) {
-        printf(!scan ? "Error: [next]: scan pointer is null.\n" : "Error: record pointer is null.\n");
+        printf("Error: Invalid scan or record.\n");
         return RC_ERROR;
     }
 
-    // Initialize scan data
     RecordManager *tableManager = scan->rel->mgmtData;
     RecordManager *scanManager = scan->mgmtData;
     Schema *schema = scan->rel->schema;
 
-    // Ensure a scanning condition is present
     if (!scanManager->condition) {
         return RC_SCAN_CONDITION_NOT_FOUND;
     }
 
-    // Allocate and initialize result value
     Value *result = (Value *)malloc(sizeof(Value));
     memset(result, 0, sizeof(Value));
     char *data;
-
-    // Calculate record size and total slots per page
     int recordSize = getRecordSize(schema);
     int totalSlots = PAGE_SIZE / recordSize;
-
-    // Retrieve scan count and total tuples
     int scanCount = scanManager->scanCount;
     int totalTuples = tableManager->tuplesCount;
 
-    // Check if there are any tuples in the table
     if (totalTuples == 0) {
         free(result);
         return RC_RM_NO_MORE_TUPLES;
     }
 
-    // Iterate through the records
     while (scanCount <= totalTuples) {
-        // Set initial page and slot if starting scan
         if (scanCount > 0) {
             scanManager->recordID.slot++;
-            // Move to the next page if all slots are scanned
             if (scanManager->recordID.slot >= totalSlots) {
                 scanManager->recordID.slot = 0;
                 scanManager->recordID.page++;
@@ -475,48 +406,30 @@ extern RC next(RM_ScanHandle *scan, Record *record) {
             scanManager->recordID.slot = 0;
         }
 
-        // Pin the current page in the buffer pool
         pinPage(&tableManager->bufferPool, &scanManager->pageHandle, scanManager->recordID.page);
-
-        // Calculate the data location for the current slot
         data = scanManager->pageHandle.data + (scanManager->recordID.slot * recordSize);
-
-        // Set the record's ID to the current scan position
         record->id.page = scanManager->recordID.page;
         record->id.slot = scanManager->recordID.slot;
+        memcpy(record->data + 1, data + 1, recordSize - 1);
 
-        // Copy the record data
-        char *dataPointer = record->data;
-        *dataPointer = '-'; // Tombstone mechanism
-        memcpy(++dataPointer, data + 1, recordSize - 1);
-
-        // Increment scan count
         scanManager->scanCount++;
         scanCount++;
 
-        // Evaluate the condition on the current record
         evalExpr(record, schema, scanManager->condition, &result);
-
-        // If the record satisfies the condition, unpin the page and return
         if (result->v.boolV == TRUE) {
             unpinPage(&tableManager->bufferPool, &scanManager->pageHandle);
             free(result);
             return RC_OK;
         }
 
-        // Unpin the page after processing
         unpinPage(&tableManager->bufferPool, &scanManager->pageHandle);
     }
 
-    // Reset scan manager values after completing the scan
     scanManager->recordID.page = 1;
     scanManager->recordID.slot = 0;
     scanManager->scanCount = 0;
-
-    // Free allocated memory for result
     free(result);
 
-    // No more tuples satisfying the condition
     return RC_RM_NO_MORE_TUPLES;
 }
 
@@ -620,34 +533,33 @@ extern RC freeSchema (Schema *schema)
 	return RC_OK;
 }
 
-extern RC createRecord (Record **record, Schema *schema)
-{
-    if (record == NULL || schema == NULL) {
-        printf(record == NULL ? "Error: [createRecord]: record pointer is null.\n" : "Error: schema pointer is null.\n");
+RC createRecord(Record **record, Schema *schema) {
+    if (!record || !schema) {
+        printf("Error: Invalid record or schema.\n");
         return RC_ERROR;
     }
 
-	// Allocate memory for the new record
-	Record *newRecord = (Record*) malloc(sizeof(Record));
-	memset(newRecord, 0, sizeof(Record));
-	
-	// Retrieve the record size and allocate memory for new record data
-	int sizeOfRecord = getRecordSize(schema);
-	newRecord->data= (char*) malloc(sizeOfRecord);
-	memset(newRecord->data, 0, sizeOfRecord);
+    // Allocate memory for the new record
+    Record *newRecord = (Record*) malloc(sizeof(Record));
+    memset(newRecord, 0, sizeof(Record));
 
-	// Setting page and slot position to -1 and Retrieve the starting position in memory of the record's data
-	newRecord->id.page = newRecord->id.slot = -1;
-	char *dataPointer = newRecord->data;
-	
-	// We used '-' for Tombstone mechanism
-	*dataPointer = '-';
-	
-	// Append '\0' to dataPointer
-	*(++dataPointer) = '\0';
-	*record = newRecord;
+    // Determine the size of the record and allocate memory for its data
+    int recordSize = getRecordSize(schema);
+    newRecord->data = (char*) malloc(recordSize);
+    memset(newRecord->data, 0, recordSize);
 
-	return RC_OK;
+    // Initialize the record's ID and data
+    newRecord->id.page = newRecord->id.slot = -1;
+    char *dataPointer = newRecord->data;
+
+    // Use '-' as a tombstone marker
+    *dataPointer = '-';
+
+    // Ensure the data is null-terminated
+    *(++dataPointer) = '\0';
+    *record = newRecord;
+
+    return RC_OK;
 }
 
 RC attrOffset (Schema *schema, int attrNum, int *result)
