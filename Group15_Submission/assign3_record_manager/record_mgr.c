@@ -777,42 +777,40 @@ extern RC setAttr (Record *record, Schema *schema, int attrNum, Value *value)
         return RC_ERROR;
     }
 
-	int varOffset = 0;
+    int offset = 0;
 
-	// Depending on the attribute number, obtaining the ofset value of the attributes
-	attrOffset(schema, attrNum, &varOffset);
+    // Calculate the offset for the attribute
+    attrOffset(schema, attrNum, &offset);
 
-	// locating the beginning of the record's data in memory
-	char *pointerOfData = record->data;
-	
-	// Increasing the beginning position's offset
-	pointerOfData = pointerOfData + varOffset;
-		
-    if (schema->dataTypes[attrNum] == DT_STRING) {
-        int len = schema->typeLength[attrNum];
-        if (strlen(value->v.stringV) >= len) {
-            strncpy(pointerOfData, value->v.stringV, len - 1);
-            pointerOfData[len - 1] = '\0';
-        } else {
-            strncpy(pointerOfData, value->v.stringV, len);
-            pointerOfData[len - 1] = '\0';
+    // Locate the starting position of the attribute in the record's data
+    char *dataPointer = record->data + offset;
+
+    // Set the attribute value based on its type
+    switch (schema->dataTypes[attrNum]) {
+        case DT_STRING: {
+            int length = schema->typeLength[attrNum];
+            if (strlen(value->v.stringV) >= length) {
+                strncpy(dataPointer, value->v.stringV, length - 1);
+                dataPointer[length - 1] = '\0';
+            } else {
+                strncpy(dataPointer, value->v.stringV, length);
+                dataPointer[length - 1] = '\0';
+            }
+            break;
         }
-        pointerOfData = pointerOfData + schema->typeLength[attrNum];
+        case DT_INT:
+            *(int *)dataPointer = value->v.intV;
+            break;
+        case DT_FLOAT:
+            *(float *)dataPointer = value->v.floatV;
+            break;
+        case DT_BOOL:
+            *(bool *)dataPointer = value->v.boolV;
+            break;
+        default:
+            printf("Error: [setAttr]: Unsupported data type.\n");
+            return RC_ERROR;
     }
-	else if (schema->dataTypes[attrNum] == DT_INT) {
-		*(int *)pointerOfData = value->v.intV;
-		pointerOfData = pointerOfData + sizeof(int);
-	}
-	else if (schema->dataTypes[attrNum] == DT_FLOAT) {
-		*(float *)pointerOfData = value->v.floatV;
-		pointerOfData = pointerOfData + sizeof(float);
-	}
-	else if (schema->dataTypes[attrNum] == DT_BOOL) {
-		*(bool *)pointerOfData = value->v.boolV;
-		pointerOfData = pointerOfData + sizeof(bool);
-	}
-	else {
-		printf("No Serializer for the defined datatype.\n");
-	}
-	return RC_OK;
+
+    return RC_OK;
 }
