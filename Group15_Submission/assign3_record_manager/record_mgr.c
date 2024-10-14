@@ -471,16 +471,16 @@ extern RC next(RM_ScanHandle *scan, Record *record) {
     // Iterate through the records
     while (scanCount <= totalTuples) {
         // Set initial page and slot if starting scan
-        if (scanCount <= 0) {
-            scanManager->recordID.page = 1;
-            scanManager->recordID.slot = 0;
-        } else {
+        if (scanCount > 0) {
             scanManager->recordID.slot++;
             // Move to the next page if all slots are scanned
             if (scanManager->recordID.slot >= totalSlots) {
                 scanManager->recordID.slot = 0;
                 scanManager->recordID.page++;
             }
+        } else {
+            scanManager->recordID.page = 1;
+            scanManager->recordID.slot = 0;
         }
 
         // Pin the current page in the buffer pool
