@@ -230,36 +230,36 @@ extern int getNumTuples (RM_TableData *rel)
 	return recordManager->tuplesCount;
 }
 
-RC insertRecord(RM_TableData* table, Record* record) {
-    if (!table || !record) {
+RC insertRecord(RM_TableData *rel, Record *record) {
+    if (!rel || !record) {
         printf("Error: Invalid table or record.\n");
         return RC_ERROR;
     }
 
-    RecordManager *manager = table->mgmtData;
-    RID *recordID = &record->id;
-    recordID->page = manager->freePage;
-    int recordSize = getRecordSize(table->schema);
+    RecordManager *mgr = rel->mgmtData;
+    RID *rid = &record->id;
+    rid->page = mgr->freePage;
+    int recordSize = getRecordSize(rel->schema);
 
-    pinPage(&manager->bufferPool, &manager->pageHandle, recordID->page);
-    char* dataPointer = manager->pageHandle.data;
+    pinPage(&mgr->bufferPool, &mgr->pageHandle, rid->page);
+    char *dataPointer = mgr->pageHandle.data;
 
-    while ((recordID->slot = getFreeSpace(dataPointer, recordSize)) == -1) {
-        unpinPage(&manager->bufferPool, &manager->pageHandle);
-        recordID->page++;
-        pinPage(&manager->bufferPool, &manager->pageHandle, recordID->page);
-        dataPointer = manager->pageHandle.data;
+    while ((rid->slot = getFreeSpace(dataPointer, recordSize)) == -1) {
+        unpinPage(&mgr->bufferPool, &mgr->pageHandle);
+        rid->page++;
+        pinPage(&mgr->bufferPool, &mgr->pageHandle, rid->page);
+        dataPointer = mgr->pageHandle.data;
     }
 
-    markDirty(&manager->bufferPool, &manager->pageHandle);
-    dataPointer += (recordID->slot * recordSize);
-    *dataPointer = '+';
-    memcpy(dataPointer + 1, record->data + 1, recordSize - 1);
+    markDirty(&mgr->bufferPool, &mgr->pageHandle);
+    char *slotPtr = dataPointer + (rid->slot * recordSize);
+    *slotPtr = '+';
+    memcpy(slotPtr + 1, record->data + 1, recordSize - 1);
 
-    unpinPage(&manager->bufferPool, &manager->pageHandle);
-    manager->tuplesCount++;
-    pinPage(&manager->bufferPool, &manager->pageHandle, 0);
+    unpinPage(&mgr->bufferPool, &mgr->pageHandle);
+    mgr->tuplesCount++;
 
+    pinPage(&mgr->bufferPool, &mgr->pageHandle, 0);
     return RC_OK;
 }
 
