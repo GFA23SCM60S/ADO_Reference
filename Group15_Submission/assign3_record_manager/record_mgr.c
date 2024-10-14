@@ -96,7 +96,12 @@ extern RC createTable (char *name, Schema *schema)
 
 	for(int k = 0; k < schema->numAttr; k++){
 		// Setting attribute name and it's data type
+		if (strlen(schema->attrNames[k]) >= attributeSize) {
+            printf("\n\n ERROR: [createTable]: attribute name is too long!!! \n\n");
+            return RC_ERROR;
+        }
 		strncpy(pageHandle, schema->attrNames[k], attributeSize);
+		pageHandle[attributeSize - 1] = '\0';
 		pageHandle = pageHandle + attributeSize;
         writeIntToPage(&pageHandle, (int)schema->dataTypes[k]);
 
@@ -184,7 +189,13 @@ extern RC openTable (RM_TableData *rel, char *name)
       
 	for(int k = 0; k < schema->numAttr; k++){
 		// Setting each attribute name and it's data type
+		if (strlen(pageHandle) >= attributeSize) {
+            printf("\n\n ERROR: [openTable]: attribute name is too long!!! \n\n");
+            return RC_ERROR;
+        }
+
 		strncpy(schema->attrNames[k], pageHandle, attributeSize);
+		schema->attrNames[k][attributeSize - 1] = '\0';
 		pageHandle = pageHandle + attributeSize;
 
 		schema->dataTypes[k]= *(int*) pageHandle;
@@ -780,11 +791,17 @@ extern RC setAttr (Record *record, Schema *schema, int attrNum, Value *value)
 	// Increasing the beginning position's offset
 	pointerOfData = pointerOfData + varOffset;
 		
-	if (schema->dataTypes[attrNum] == DT_STRING) {
-		int len = schema->typeLength[attrNum];
-		strncpy(pointerOfData, value->v.stringV, len);
-		pointerOfData = pointerOfData + schema->typeLength[attrNum];
-	}
+    if (schema->dataTypes[attrNum] == DT_STRING) {
+        int len = schema->typeLength[attrNum];
+        if (strlen(value->v.stringV) >= len) {
+            strncpy(pointerOfData, value->v.stringV, len - 1);
+            pointerOfData[len - 1] = '\0';
+        } else {
+            strncpy(pointerOfData, value->v.stringV, len);
+            pointerOfData[len - 1] = '\0';
+        }
+        pointerOfData = pointerOfData + schema->typeLength[attrNum];
+    }
 	else if (schema->dataTypes[attrNum] == DT_INT) {
 		*(int *)pointerOfData = value->v.intV;
 		pointerOfData = pointerOfData + sizeof(int);
