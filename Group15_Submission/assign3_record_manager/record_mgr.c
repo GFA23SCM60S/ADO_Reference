@@ -664,21 +664,26 @@ RC attrOffset (Schema *schema, int attrNum, int *result)
 	*result = 1;
 
 	// Iterating through all the attributes in the schema
-	for(i = 0; i < attrNum; i++){	
-		if (schema->dataTypes[i] == DT_FLOAT) {
-            // If attribute is FLOAT, then add size of FLOAT
-            *result = *result + sizeof(float);
-        } else if (schema->dataTypes[i] == DT_STRING) {
-            // If attribute is STRING, then size = typeLength (Defined Length of STRING)
-            *result = *result + schema->typeLength[i];
-        } else  if (schema->dataTypes[i] == DT_BOOL) {
-            // If attribute is BOOLEAN, then add size of BOOLEAN
-            *result = *result + sizeof(bool);
-        } else if (schema->dataTypes[i] == DT_INT) {
-            // If attribute is INTEGER, then add size of INT
-            *result = *result + sizeof(int);
+    for (int i = 0; i < attrNum; i++) {
+        switch (schema->dataTypes[i]) {
+            case DT_FLOAT:
+                *result += sizeof(float);
+                break;
+            case DT_STRING:
+                *result += schema->typeLength[i];
+                break;
+            case DT_BOOL:
+                *result += sizeof(bool);
+                break;
+            case DT_INT:
+                *result += sizeof(int);
+                break;
+            default:
+                printf("Error: Unknown data type.\n");
+                break;
         }
-	}
+    }
+
 	return RC_OK;
 }
 
