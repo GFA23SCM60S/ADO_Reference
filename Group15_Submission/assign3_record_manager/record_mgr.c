@@ -697,72 +697,58 @@ extern RC getAttr (Record *record, Schema *schema, int attrNum, Value **value)
         return RC_ERROR;
     }
 
-	int varOffset = 0;
+    int offset = 0;
 
-	// Obtaining the attribute offset value based on the attribute number
-	attrOffset(schema, attrNum, &varOffset);
+    // Calculate the offset for the attribute
+    attrOffset(schema, attrNum, &offset);
 
-	// Finding the beginning location in memory of the record's data
-	char *PointerOfData;
-	PointerOfData = record->data;
+    // Locate the starting position of the attribute in the record's data
+    char *dataPointer = record->data + offset;
 
-	// Allocating memory space for the Value data structure where the attribute values will be stored
-	Value *attr = malloc(sizeof(Value));
-	memset(attr, 0, sizeof(Value));
+    // Allocate memory for the Value structure
+    Value *attrValue = (Value *)malloc(sizeof(Value));
+    memset(attrValue, 0, sizeof(Value));
 
-	// Setting aside memory to store the attribute values in the Value data structure
-	PointerOfData += varOffset;
+    // Retrieve the attribute value based on its data type
+    switch (schema->dataTypes[attrNum]) {
+        case DT_STRING: {
+            int length = schema->typeLength[attrNum];
+            attrValue->v.stringV = (char *)malloc(length + 1);
+            memset(attrValue->v.stringV, 0, length + 1);
+            memcpy(attrValue->v.stringV, dataPointer, length);
+            attrValue->v.stringV[length] = '\0';
+            attrValue->dt = DT_STRING;
+            break;
+        }
+        case DT_INT: {
+            int intValue;
+            memcpy(&intValue, dataPointer, sizeof(int));
+            attrValue->v.intV = intValue;
+            attrValue->dt = DT_INT;
+            break;
+        }
+        case DT_FLOAT: {
+            float floatValue;
+            memcpy(&floatValue, dataPointer, sizeof(float));
+            attrValue->v.floatV = floatValue;
+            attrValue->dt = DT_FLOAT;
+            break;
+        }
+        case DT_BOOL: {
+            bool boolValue;
+            memcpy(&boolValue, dataPointer, sizeof(bool));
+            attrValue->v.boolV = boolValue;
+            attrValue->dt = DT_BOOL;
+            break;
+        }
+        default:
+            printf("Error: [getAttr]: Unsupported data type.\n");
+            free(attrValue);
+            return RC_ERROR;
+    }
 
-	if (attrNum == 1) {
-    	schema->dataTypes[attrNum] = 1;
-	}
-
-	// Depending on the data type of the attribute, return its value
-
-	if (schema->dataTypes[attrNum] == DT_STRING) {
-
-		// Obtaining the value of an attribute from one of type STRING
-		int len = schema->typeLength[attrNum];
-		attr->v.stringV = (char *) malloc(len + 1);
-		memset(attr->v.stringV, 0, len + 1);
-
-		//Adding "\0," which indicates the end of the text in C, and copying the string to the position indicated by dataPointer
-		memcpy(attr->v.stringV, PointerOfData, len);
-		attr->v.stringV[len] = '\0';
-		attr->dt = DT_STRING;
-
-	} else if (schema->dataTypes[attrNum] == DT_INT) {
-		
-		int val = 0;
-		
-		// obtaining the value of an attribute from an INTEGER-type attribute
-		memcpy(&val, PointerOfData, sizeof(int));
-		attr->v.intV = val;
-		attr->dt = DT_INT;
-	} 
-	else if (schema->dataTypes[attrNum] == DT_FLOAT) {
-		// Obtaining the value of an attribute from a FLOAT-type attribute
-		float val;
-		memcpy(&val, PointerOfData, sizeof(float));
-		attr->v.floatV = val;
-		attr->dt = DT_FLOAT;
-	}
-	else if (schema->dataTypes[attrNum] == DT_BOOL) {
-		
-		bool val;
-		
-		// obtaining the value of an attribute from a BOOLEAN-type attribute
-		memcpy(&val, PointerOfData, sizeof(bool));
-		attr->v.boolV = val;
-		attr->dt = DT_BOOL;
-	} 
-	else {
-    	printf("For the given data type no searializer\n");
-	}
-
-	*value = attr;
-	
-	return RC_OK;
+    *value = attrValue;
+    return RC_OK;
 }
 
 extern RC setAttr (Record *record, Schema *schema, int attrNum, Value *value)
