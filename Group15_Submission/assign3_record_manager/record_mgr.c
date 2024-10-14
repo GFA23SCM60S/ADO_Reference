@@ -599,18 +599,23 @@ extern Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes,
         return NULL;
     }
 
-	// Allocate memory space to schema
-	Schema *tempSchema = (Schema *) malloc(sizeof(Schema));
-	memset(tempSchema, 0, sizeof(Schema));
-	//Setting the arguments in the schema
-	(*tempSchema).numAttr = numAttr;
-	(*tempSchema).attrNames = attrNames;
-	(*tempSchema).dataTypes = dataTypes;
-	(*tempSchema).typeLength = typeLength;
-	(*tempSchema).keySize = keySize;
-	(*tempSchema).keyAttrs = keys;
+    // Allocate memory for the schema
+    Schema *newSchema = (Schema *)malloc(sizeof(Schema));
+    if (!newSchema) {
+        printf("Error: [createSchema]: Memory allocation failed.\n");
+        return NULL;
+    }
 
-	return tempSchema;
+    // Initialize the schema structure
+    memset(newSchema, 0, sizeof(Schema));
+    newSchema->numAttr = numAttr;
+    newSchema->attrNames = attrNames;
+    newSchema->dataTypes = dataTypes;
+    newSchema->typeLength = typeLength;
+    newSchema->keySize = keySize;
+    newSchema->keyAttrs = keys;
+
+	return newSchema;
 }
 
 extern RC freeSchema (Schema *schema)
