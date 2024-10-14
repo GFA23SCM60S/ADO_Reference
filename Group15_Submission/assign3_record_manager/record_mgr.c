@@ -391,45 +391,37 @@ extern RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond)
         return RC_ERROR;
     }
 
-	// cond condition checking
-	if(cond != NULL){
-		// Opening the table
-		openTable(rel, "ScanTable");
+   // Check if the condition is provided
+    if (cond) {
+        // Open the table for scanning
+        openTable(rel, "ScanTable");
 
-		RecordManager *Scanner;
-		RecordManager *TableManager;
+        // Allocate memory for the scan manager
+        RecordManager *scanManager = (RecordManager *)malloc(sizeof(RecordManager));
+        if (!scanManager) {
+            printf("Error: [startScan]: Memory allocation failed.\n");
+            return RC_ERROR;
+        }
+        memset(scanManager, 0, sizeof(RecordManager));
 
-		// Allocating some memory to the Scanner
-		Scanner = (RecordManager*) malloc(sizeof(RecordManager));
-		memset(Scanner, 0, sizeof(RecordManager));
+        // Initialize scan manager fields
+        scanManager->recordID.page = 1;  // Start from the first page
+        scanManager->recordID.slot = 0;  // Start from the first slot
+        scanManager->scanCount = 0;      // Initialize scan count
+        scanManager->condition = cond;   // Set the scan condition
 
-		// Setting the scan's meta data to our meta data
-		(*scan).mgmtData = Scanner;
+        // Set the scan handle's management data
+        scan->mgmtData = scanManager;
+        scan->rel = rel;
 
-		// To start the scan from 1st page
-		(*Scanner).recordID.page = 1;
-			
-		// To start the scan from 1st slot	
-		(*Scanner).recordID.slot = 0;
-		
-		// Initializing counter	
-		(*Scanner).scanCount = 0;
+        // Initialize table manager
+        RecordManager *tableManager = rel->mgmtData;
+        tableManager->tuplesCount = attributeSize;
 
-		// Condition for scanning
-		(*Scanner).condition = cond;
-			
-		// Assigning meta data to table meta data
-		TableManager = rel->mgmtData;
-		
-		TableManager->tuplesCount = attributeSize;
-
-		(*scan).rel= rel;
-
-		return RC_OK;
-	}else{
-		return RC_SCAN_CONDITION_NOT_FOUND;
-	}
-		
+        return RC_OK;
+    } else {
+        return RC_SCAN_CONDITION_NOT_FOUND;
+    }
 }
 
 extern RC next(RM_ScanHandle *scan, Record *record) {
