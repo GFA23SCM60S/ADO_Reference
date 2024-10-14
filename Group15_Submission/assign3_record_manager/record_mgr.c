@@ -564,24 +564,32 @@ extern int getRecordSize (Schema *schema)
         return -1;
     }
 
-	int length = 0, i; // Initial Value set to 0
-	
-	// Iterating the attributes of the schema
-	for(i = 0; i < (*schema).numAttr; i++)
-	{
-		// Checking the Data Type of the attribute
-		// Setting the length as per the data type value
-		if((*schema).dataTypes[i] == DT_BOOL){
-			length = length + sizeof(bool);
-		}else if ((*schema).dataTypes[i] == DT_FLOAT){
-			length = length + sizeof(float);
-		}else if((*schema).dataTypes[i] == DT_INT){
-			length = length + sizeof(int);
-		}else if((*schema).dataTypes[i] == DT_STRING){
-			length = length + (*schema).typeLength[i];
-		}
-	}
-	return length+1;
+    int totalLength = 0;
+
+    // Iterate through each attribute in the schema
+    for (int i = 0; i < schema->numAttr; i++) {
+        // Determine the size of each attribute based on its data type
+        switch (schema->dataTypes[i]) {
+            case DT_BOOL:
+                totalLength += sizeof(bool);
+                break;
+            case DT_FLOAT:
+                totalLength += sizeof(float);
+                break;
+            case DT_INT:
+                totalLength += sizeof(int);
+                break;
+            case DT_STRING:
+                totalLength += schema->typeLength[i];
+                break;
+            default:
+                printf("Error: [getRecordSize]: Unknown data type.\n");
+                return -1;
+        }
+    }
+
+    // Return the total length plus one for the tombstone mechanism
+    return totalLength + 1;
 }
 
 extern Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys)
