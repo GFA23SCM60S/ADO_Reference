@@ -57,8 +57,8 @@ extern RC initRecordManager (void *mgmtData)
 
 extern RC shutdownRecordManager ()
 {
-	recordManager = NULL;
 	free(recordManager);
+	recordManager = NULL;
 	printf("[shutdown]: Record manager shutdown success!\n");
 	return RC_OK;
 }
@@ -166,17 +166,21 @@ extern RC openTable (RM_TableData *rel, char *name)
 
 	// Allocating memory space in schema
 	schema = (Schema*) malloc(sizeof(Schema));
+	memset(schema, 0, sizeof(Schema));
     
 	// Setting parameters of schema
 	schema->numAttr = attrCount;
 	schema->typeLength = (int*) malloc(sizeof(int) *attrCount);
+	memset(schema->typeLength, 0, sizeof(int) *attrCount);
 	schema->attrNames = (char**) malloc(sizeof(char*) *attrCount);
-	
+	memset(schema->attrNames, 0, sizeof(char*) *attrCount);
 	schema->dataTypes = (DataType*) malloc(sizeof(DataType) *attrCount);
-	
+	memset(schema->dataTypes, 0, sizeof(DataType) *attrCount);
 	// Allocate memory for storing attribute's name for each attribute
-	for(int k = 0; k < attrCount; k++)
+	for(int k = 0; k < attrCount; k++) {
 		schema->attrNames[k]= (char*) malloc(attributeSize);
+		memset(schema->attrNames[k], 0, attributeSize);
+	}
       
 	for(int k = 0; k < schema->numAttr; k++){
 		// Setting each attribute name and it's data type
@@ -386,6 +390,7 @@ extern RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond)
 
 		// Allocating some memory to the Scanner
 		Scanner = (RecordManager*) malloc(sizeof(RecordManager));
+		memset(Scanner, 0, sizeof(RecordManager));
 
 		// Setting the scan's meta data to our meta data
 		(*scan).mgmtData = Scanner;
@@ -435,6 +440,7 @@ extern RC next (RM_ScanHandle *scan, Record *record)
 	}
 
 	Value *result = (Value *) malloc(sizeof(Value));
+	memset(result, 0, sizeof(Value));
     char *data;
    	
 	// Retrieve record size of the schema and calculate total no. of slots
@@ -557,14 +563,14 @@ extern int getRecordSize (Schema *schema)
 	{
 		// Checking the Data Type of the attribute
 		// Setting the length as per the data type value
-		if((*schema).dataTypes[i] == DT_STRING){
-			length = length + (*schema).typeLength[i];
-		}else if ((*schema).dataTypes[i] == DT_INT){
-			length = length + sizeof(int);
-		}else if((*schema).dataTypes[i] == DT_FLOAT){
-			length = length + sizeof(float);
-		}else if((*schema).dataTypes[i] == DT_BOOL){
+		if((*schema).dataTypes[i] == DT_BOOL){
 			length = length + sizeof(bool);
+		}else if ((*schema).dataTypes[i] == DT_FLOAT){
+			length = length + sizeof(float);
+		}else if((*schema).dataTypes[i] == DT_INT){
+			length = length + sizeof(int);
+		}else if((*schema).dataTypes[i] == DT_STRING){
+			length = length + (*schema).typeLength[i];
 		}
 	}
 	return length+1;
@@ -579,6 +585,7 @@ extern Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes,
 
 	// Allocate memory space to schema
 	Schema *tempSchema = (Schema *) malloc(sizeof(Schema));
+	memset(tempSchema, 0, sizeof(Schema));
 	//Setting the arguments in the schema
 	(*tempSchema).numAttr = numAttr;
 	(*tempSchema).attrNames = attrNames;
@@ -609,10 +616,12 @@ extern RC createRecord (Record **record, Schema *schema)
 
 	// Allocate memory for the new record
 	Record *newRecord = (Record*) malloc(sizeof(Record));
+	memset(newRecord, 0, sizeof(Record));
 	
 	// Retrieve the record size and allocate memory for new record data
 	int sizeOfRecord = getRecordSize(schema);
 	newRecord->data= (char*) malloc(sizeOfRecord);
+	memset(newRecord->data, 0, sizeOfRecord);
 
 	// Setting page and slot position to -1 and Retrieve the starting position in memory of the record's data
 	newRecord->id.page = newRecord->id.slot = -1;
@@ -691,6 +700,7 @@ extern RC getAttr (Record *record, Schema *schema, int attrNum, Value **value)
 
 	// Allocating memory space for the Value data structure where the attribute values will be stored
 	Value *attr = malloc(sizeof(Value));
+	memset(attr, 0, sizeof(Value));
 
 	// Setting aside memory to store the attribute values in the Value data structure
 	PointerOfData += varOffset;
@@ -706,6 +716,7 @@ extern RC getAttr (Record *record, Schema *schema, int attrNum, Value **value)
 		// Obtaining the value of an attribute from one of type STRING
 		int len = schema->typeLength[attrNum];
 		attr->v.stringV = (char *) malloc(len + 1);
+		memset(attr->v.stringV, 0, len + 1);
 
 		//Adding "\0," which indicates the end of the text in C, and copying the string to the position indicated by dataPointer
 		memcpy(attr->v.stringV, PointerOfData, len);
