@@ -692,30 +692,24 @@ extern RC setAttr (Record *record, Schema *schema, int attrNum, Value *value)
 
     // Locate the starting position of the attribute in the record's data
     char *dataPointer = record->data + offset;
+    DataType dt = schema->dataTypes[attrNum];
 
     // Set the attribute value based on its type
-    switch (schema->dataTypes[attrNum]) {
+    switch (dt) {
         case DT_STRING: {
-            int length = schema->typeLength[attrNum];
-            if (strlen(value->v.stringV) >= length) {
-                strncpy(dataPointer, value->v.stringV, length - 1);
-                dataPointer[length - 1] = '\0';
-            } else {
-                strncpy(dataPointer, value->v.stringV, length);
-                dataPointer[length - 1] = '\0';
-            }
+            memcpy(dataPointer, value->v.stringV, schema->typeLength[attrNum]);
             break;
         }
-        case DT_INT:
+         case DT_INT:
             *(int *)dataPointer = value->v.intV;
             break;
-        case DT_FLOAT:
+         case DT_FLOAT:
             *(float *)dataPointer = value->v.floatV;
             break;
-        case DT_BOOL:
+         case DT_BOOL:
             *(bool *)dataPointer = value->v.boolV;
             break;
-        default:
+         default:
             printf("Error: [setAttr]: Unsupported data type.\n");
             return RC_ERROR;
     }
