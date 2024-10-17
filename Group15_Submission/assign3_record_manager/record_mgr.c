@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "record_mgr.h"
 #include "buffer_mgr.h"
 #include "storage_mgr.h"
@@ -69,12 +70,18 @@ extern RC createTable (char *name, Schema *schema)
 	RC result;
 	char *pageHandle = data;
 	SM_FileHandle fileHandle;
-
     if (name == NULL || schema == NULL) {
         printf(name == NULL ? "Error: [createTable]: name is null.\n" : "Error: schema pointer is null.\n");
         return RC_ERROR;
     }
 
+    // Check if the file already exists
+    if (access(name, F_OK) != -1) {
+        // File exists, delete it
+        if (remove(name) != 0) {
+            return RC_FILE_NOT_FOUND;
+        }
+    }
 	// Allocating memory space to the record manager custom data structure
 	recordManager = (RecordManager*) malloc(sizeof(RecordManager));
 
@@ -112,24 +119,32 @@ extern RC createTable (char *name, Schema *schema)
 	// Creating a page file as table name using the storage manager
 	if((result = createPageFile(name)) != RC_OK) {
 	    printf("[createTable]: create page file failed!\n");
+	    free(recordManager);
 	    return result;
 	}
 
 	// Opening the newly created page using the storage manager
 	if((result = openPageFile(name, &fileHandle)) != RC_OK) {
 		printf("[createTable]: open page file failed!\n");
+		free(recordManager);
+		destroyPageFile(name);
 		return result;
 	}
 
 	// Write to first location of the page file using the storage manager
 	if((result = writeBlock(0, &fileHandle, data)) != RC_OK) {
 		printf("[createTable]: write block failed!\n");
+		free(recordManager);
+        closePageFile(&fileHandle);
+        destroyPageFile(name);
 		return result;
 	}
 
 	// Closing the file after writing to file using the storage manager
 	if((result = closePageFile(&fileHandle)) != RC_OK) {
 		printf("[createTable]: close page file failed!\n");
+		free(recordManager);
+        destroyPageFile(name);
 		return result;
 	}
 
@@ -415,7 +430,12 @@ RC next(RM_ScanHandle *scan, Record *record) {
         scanManager->scanCount++;
         scanCount++;
 
-        evalExpr(record, schema, scanManager->condition, &result);
+        RC evalResult = evalExpr(record, schema, scanManager->condition, &result);
+        if (evalResult != RC_OK) {
+                    unpinPage(&tableManager->bufferPool, &scanManager->pageHandle);
+                    free(result);
+                    return evalResult;
+                }
         if (result->v.boolV == TRUE) {
             unpinPage(&tableManager->bufferPool, &scanManager->pageHandle);
             free(result);
@@ -631,6 +651,8 @@ extern RC getAttr (Record *record, Schema *schema, int attrNum, Value **value)
     Value *attrValue = (Value *)malloc(sizeof(Value));
     memset(attrValue, 0, sizeof(Value));
 
+    attrValue->dt = schema->dataTypes[attrNum];
+
     // Retrieve the attribute value based on its data type
     switch (schema->dataTypes[attrNum]) {
         case DT_STRING: {
@@ -643,18 +665,12 @@ extern RC getAttr (Record *record, Schema *schema, int attrNum, Value **value)
             break;
         }
         case DT_INT: {
-            int intValue;
-            memcpy(&intValue, dataPointer, sizeof(int));
-            attrValue->v.intV = intValue;
-            attrValue->dt = DT_INT;
-            break;
+            attrValue->v.intV = *(int *)(dataPointer);
+                        break;
         }
         case DT_FLOAT: {
-            float floatValue;
-            memcpy(&floatValue, dataPointer, sizeof(float));
-            attrValue->v.floatV = floatValue;
-            attrValue->dt = DT_FLOAT;
-            break;
+            attrValue->v.floatV = *(float *)(dataPointer);
+                        break;
         }
         case DT_BOOL: {
             bool boolValue;
@@ -697,17 +713,22 @@ extern RC setAttr (Record *record, Schema *schema, int attrNum, Value *value)
     // Set the attribute value based on its type
     switch (dt) {
         case DT_STRING: {
-            memcpy(dataPointer, value->v.stringV, schema->typeLength[attrNum]);
+            int length = schema->typeLength[attrNum];
+            strncpy(dataPointer, value->v.stringV, length);
+            dataPointer = dataPointer + length;
             break;
         }
          case DT_INT:
             *(int *)dataPointer = value->v.intV;
+            dataPointer = dataPointer + sizeof(int);
             break;
          case DT_FLOAT:
             *(float *)dataPointer = value->v.floatV;
+            dataPointer = dataPointer + sizeof(float);
             break;
          case DT_BOOL:
             *(bool *)dataPointer = value->v.boolV;
+            dataPointer = dataPointer + sizeof(bool);
             break;
          default:
             printf("Error: [setAttr]: Unsupported data type.\n");

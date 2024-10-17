@@ -10,8 +10,14 @@
 RC 
 valueEquals (Value *left, Value *right, Value *result)
 {
+    result->dt = DT_BOOL;
 	if(left->dt != right->dt)
-		THROW(RC_RM_COMPARE_VALUE_OF_DIFFERENT_DATATYPE, "equality comparison only supported for values of the same datatype");
+		{
+                result->v.boolV = FALSE;
+                return RC_OK;
+            }
+//     if(left->dt != right->dt)
+//     		THROW(RC_RM_COMPARE_VALUE_OF_DIFFERENT_DATATYPE, "equality comparison only supported for values of the same datatype");
 
 	result->dt = DT_BOOL;
 
