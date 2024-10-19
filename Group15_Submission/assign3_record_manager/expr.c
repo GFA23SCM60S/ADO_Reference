@@ -10,18 +10,14 @@
 RC 
 valueEquals (Value *left, Value *right, Value *result)
 {
-    result->dt = DT_BOOL;
-	if(left->dt != right->dt)
-		{
-                result->v.boolV = FALSE;
-                return RC_OK;
-            }
-//     if(left->dt != right->dt)
-//     		THROW(RC_RM_COMPARE_VALUE_OF_DIFFERENT_DATATYPE, "equality comparison only supported for values of the same datatype");
+    if(left->dt != right->dt) {
+    	    result->v.boolV = FALSE;
+    	    return RC_OK;
+    	}
 
-	result->dt = DT_BOOL;
+    	result->dt = DT_BOOL;
 
-	switch(left->dt) {
+    	switch(left->dt) {
 	case DT_INT:
 		result->v.boolV = (left->v.intV == right->v.intV);
 		break;
