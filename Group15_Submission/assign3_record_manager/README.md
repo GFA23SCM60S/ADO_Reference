@@ -25,7 +25,7 @@ This project extends the Buffer Manager project to implement a Record Manager fo
 - `expr.c`: Source file for handling expressions and conditions
 - `storage_mgr.h`: Header file for storage manager (from Buffer Manager project)
 - `storage_mgr.c`: Source file for storage manager (from Buffer Manager project)
-- `test_record_mgr.c`: Test cases for the Record Manager
+- `test_assign3_1.c`: Test cases for the Record Manager
 - `test_helper.h`: Helper functions for the test program
 
 ## Compilation and Execution
@@ -83,7 +83,7 @@ The following optional extensions can be implemented to enhance the functionalit
 
 ## Testing
 
-The `test_record_mgr.c` file contains various test cases for the Record Manager, validating all functionalities, including insertion, deletion, updating, and scanning. Running this executable will output the results of each test case.
+The `test_assign3_1.c` file contains various test cases for the Record Manager, validating all functionalities, including insertion, deletion, updating, and scanning. Running this executable will output the results of each test case.
 
 ## Requirements
 
