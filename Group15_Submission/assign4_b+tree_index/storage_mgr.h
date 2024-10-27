@@ -2,6 +2,7 @@
 #define STORAGE_MGR_H
 
 #include "dberror.h"
+#include "const.h"
 
 /************************************************************
  *                    handle data structures                *
