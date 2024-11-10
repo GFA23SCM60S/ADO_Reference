@@ -750,46 +750,82 @@ static RC handleParentOverflow(BTreeHandle* tree, BT_Node* parent, BT_Node* righ
 }
 
 static BT_Node* createOverflowedNode(BTreeHandle* tree, BT_Node* parent) {
-    BT_Node* overflowed = createBTNode(tree->size + 1, 0, -1);
+    const int newSize = tree->size + 1;
+    BT_Node* overflowed = createBTNode(newSize, 0, -1);
+
+    // Copy node properties
     overflowed->vals->fill = parent->vals->fill;
     overflowed->childrenPages->fill = parent->childrenPages->fill;
-    memcpy(overflowed->vals->elems, parent->vals->elems, SIZE_INT * parent->vals->fill);
-    memcpy(overflowed->childrenPages->elems, parent->childrenPages->elems, SIZE_INT * parent->childrenPages->fill);
-    memcpy(overflowed->children, parent->children, sizeof(BT_Node*) * parent->childrenPages->fill);
+
+    // Copy values and children information
+    const size_t valueSize = SIZE_INT * parent->vals->fill;
+    const size_t pageSize = SIZE_INT * parent->childrenPages->fill;
+    const size_t ptrSize = sizeof(BT_Node*) * parent->childrenPages->fill;
+
+    memcpy(overflowed->vals->elems, parent->vals->elems, valueSize);
+    memcpy(overflowed->childrenPages->elems, parent->childrenPages->elems, pageSize);
+    memcpy(overflowed->children, parent->children, ptrSize);
+
     return overflowed;
 }
 
 static void insertIntoOverflowedNode(BT_Node* overflowed, BT_Node* right, int key, int index) {
-    saInsertAt(overflowed->childrenPages, right->pageNum, index + 1);
-    for (int i = overflowed->childrenPages->fill - 1; i > index + 1; i--) {
+    const int insertPos = index + 1;
+
+    // Insert the new page number
+    saInsertAt(overflowed->childrenPages, right->pageNum, insertPos);
+
+    // Shift existing children pointers
+    for (int i = overflowed->childrenPages->fill - 1; i > insertPos; i--) {
         overflowed->children[i] = overflowed->children[i - 1];
     }
-    overflowed->children[index + 1] = right;
+
+    // Insert the new child pointer
+    overflowed->children[insertPos] = right;
 }
 
 static BT_Node* splitOverflowedNode(BTreeHandle* tree, BT_Node* parent, BT_Node* overflowed) {
-    int leftFill = overflowed->vals->fill / 2;
-    int rightFill = overflowed->vals->fill - leftFill;
+    // Calculate split points
+    const int leftFill = overflowed->vals->fill / 2;
+    const int rightFill = overflowed->vals->fill - leftFill;
+    const int leftPtrSize = leftFill + 1;
+
+    // Create right node
     BT_Node* rightParent = createBTNode(tree->size, 0, tree->nextPage);
     tree->nextPage++;
     tree->numNodes++;
 
-    // Copy left part
+    // Update left node (parent)
     parent->vals->fill = leftFill;
-    parent->childrenPages->fill = leftFill + 1;
-    int lptrsSize = parent->childrenPages->fill;
-    memcpy(parent->vals->elems, overflowed->vals->elems, SIZE_INT * leftFill);
-    memcpy(parent->childrenPages->elems, overflowed ->childrenPages->elems, SIZE_INT * lptrsSize);
-    memcpy(parent->children, overflowed->children, sizeof(BT_Node*) * lptrsSize);
+    parent->childrenPages->fill = leftPtrSize;
 
-    // Copy right part
+    // Copy data to left node (parent)
+    memcpy(parent->vals->elems,
+           overflowed->vals->elems,
+           SIZE_INT * leftFill);
+    memcpy(parent->childrenPages->elems,
+           overflowed->childrenPages->elems,
+           SIZE_INT * leftPtrSize);
+    memcpy(parent->children,
+           overflowed->children,
+           sizeof(BT_Node*) * leftPtrSize);
+
+    // Update right node
     rightParent->vals->fill = rightFill;
-    rightParent->childrenPages->fill = overflowed->childrenPages->fill - lptrsSize;
-    int rptrsSize = rightParent->childrenPages->fill;
-    memcpy(rightParent->vals->elems, overflowed->vals->elems + leftFill, SIZE_INT * rightFill);
-    memcpy(rightParent->childrenPages->elems, overflowed->childrenPages->elems + lptrsSize, SIZE_INT * rptrsSize);
-    memcpy(rightParent->children, overflowed->children + lptrsSize, sizeof(BT_Node*) * rptrsSize);
+    rightParent->childrenPages->fill = overflowed->childrenPages->fill - leftPtrSize;
 
+    // Copy data to right node
+    memcpy(rightParent->vals->elems,
+           overflowed->vals->elems + leftFill,
+           SIZE_INT * rightFill);
+    memcpy(rightParent->childrenPages->elems,
+           overflowed->childrenPages->elems + leftPtrSize,
+           SIZE_INT * rightParent->childrenPages->fill);
+    memcpy(rightParent->children,
+           overflowed->children + leftPtrSize,
+           sizeof(BT_Node*) * rightParent->childrenPages->fill);
+
+    // Clean up and return
     destroyBTNode(overflowed);
     return rightParent;
 }
@@ -1221,26 +1257,57 @@ RC nextEntry(BT_ScanHandle *handle, RID *result) {
     return RC_OK;
 }
 
-char *printTree(BTreeHandle *tree) {
-    int size = tree->numNodes * tree->size * 11 + tree->size + 14 + tree->numNodes;
-    char *result = newCharArr(size);
-    BT_Node *node = tree->root;
-    int level = 0;
+static int calculateBufferSize(BTreeHandle *tree) {
+    return (tree->numNodes * tree->size * CHARS_PER_NODE) +
+           (tree->size) +
+           PADDING_CHARS +
+           (tree->numNodes * NEWLINE_CHARS);
+}
 
-    while (node != NULL) {
-        printNodeHelper(node, result);
+static BT_Node* getLeftmostNodeAtLevel(BT_Node* root, int level) {
+    BT_Node* current = root;
 
-        if (node->isLeaf) {
-            node = node->right;
-        } else if (node->right == NULL) {
-            BT_Node *temp = tree->root;
-            for (int j = 0; j <= level; j++) {
-                temp = temp->children[0];
-            }
-            node = temp;
-            level++;
-        } else {
-            node = node->right;
+    for (int i = 0; i <= level; i++) {
+        if (current == NULL || current->children == NULL) {
+            return NULL;
+        }
+        current = current->children[0];
+    }
+
+    return current;
+}
+
+char* printTree(BTreeHandle *tree) {
+    if (tree == NULL || tree->root == NULL) {
+        return newCharArr(1);  // Return empty string for empty tree
+    }
+
+    // Allocate buffer with calculated size
+    char* result = newCharArr(calculateBufferSize(tree));
+    if (result == NULL) {
+        return NULL;  // Handle allocation failure
+    }
+
+    BT_Node* currentNode = tree->root;
+    int currentLevel = 0;
+
+    // Traverse the tree level by level
+    while (currentNode != NULL) {
+        // Print current node
+        printNodeHelper(currentNode, result);
+
+        // Determine next node to process
+        if (currentNode->isLeaf) {
+            // Move right at leaf level
+            currentNode = currentNode->right;
+        }
+        else if (currentNode->right == NULL) {
+            // Move down to next level's leftmost node
+            currentNode = getLeftmostNodeAtLevel(tree->root, ++currentLevel);
+        }
+        else {
+            // Move right at current level
+            currentNode = currentNode->right;
         }
     }
 

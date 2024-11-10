@@ -38,3 +38,7 @@
 
 #define SIZE_INT sizeof(int)
 #endif
+
+#define CHARS_PER_NODE 11  // Estimated characters needed per node
+#define PADDING_CHARS 14   // Additional padding characters
+#define NEWLINE_CHARS 1
