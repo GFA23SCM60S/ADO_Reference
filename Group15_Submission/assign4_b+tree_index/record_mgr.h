@@ -12,6 +12,14 @@ typedef struct RM_ScanHandle
 	void *mgmtData;
 } RM_ScanHandle;
 
+typedef struct ScanMgmtInfo {
+  int page;
+  int slot;
+  int totalPages;
+  int maxSlots;
+  Expr *condition;
+} ScanMgmtInfo;
+
 // table and manager
 extern RC initRecordManager (void *mgmtData);
 extern RC shutdownRecordManager ();

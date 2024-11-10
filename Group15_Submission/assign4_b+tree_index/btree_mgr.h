@@ -79,6 +79,12 @@ typedef struct ScanMgmtInfo {
   int elementIndex;
 } ScanMgmtInfo;
 
+typedef struct NodeSplitConfig {
+    int leftFill;      // Number of elements in left node
+    int rightFill;     // Number of elements in right node
+    int totalElements; // Total elements after insertion
+} NodeSplitConfig;
+
 
 
 

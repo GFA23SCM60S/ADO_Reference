@@ -215,33 +215,51 @@ void saDeleteAt(dynamicArr *arr, int index, int count) {
 }
 
 int saDeleteOne(dynamicArr *arr, int elem) {
-    int fitOn;
-    int index = dynamicArrSearch(arr, elem, &fitOn);
-
-    if (index >= 0) {
-        saDeleteAt(arr, index, 1);
+    if (arr == NULL || arr->fill == 0) {
+        return SA_ELEMENT_NOT_FOUND;
     }
 
-    return index;
+    int insertPosition;  // Position where element would fit if not found
+    int foundIndex = dynamicArrSearch(arr, elem, &insertPosition);
+
+    if (foundIndex >= 0) {
+        saDeleteAt(arr, foundIndex, 1);
+        return foundIndex;
+    }
+
+    return SA_ELEMENT_NOT_FOUND;
 }
 
 int saDeleteAll(dynamicArr *arr, int elem) {
-    int fitOn;
-    int index = dynamicArrSearch(arr, elem, &fitOn);
-
-    if (index >= 0) {
-        int count = 1;
-        while (index + count < arr->fill && elem == arr->elems[index + count]) {
-            count++;
-        }
-        saDeleteAt(arr, index, count);
+    if (arr == NULL || arr->fill == 0) {
+        return SA_ELEMENT_NOT_FOUND;
     }
 
-    return index;
+    int insertPosition;  // Position where element would fit if not found
+    int foundIndex = dynamicArrSearch(arr, elem, &insertPosition);
+
+    if (foundIndex >= 0) {
+        // Count consecutive occurrences of the element
+        int count = 1;
+        const int maxIndex = arr->fill;
+
+        while ((foundIndex + count) < maxIndex &&
+               arr->elems[foundIndex + count] == elem) {
+            count++;
+        }
+
+        // Delete all found occurrences at once
+        saDeleteAt(arr, foundIndex, count);
+        return foundIndex;
+    }
+
+    return SA_ELEMENT_NOT_FOUND;
 }
 
 inline void saEmpty(dynamicArr *arr) {
-    arr->fill = 0;
+    if (arr != NULL) {
+        arr->fill = 0;
+    }
 }
 
 void freePointers(int count, ...) {
@@ -597,10 +615,6 @@ static void updateSiblingPointersForLoading(BT_Node *left, BT_Node *current) {
     }
 }
 
-BT_Node *findNodeByKey(BTreeHandle *tree, int key) {
-    return findLeafNode(tree, key);
-}
-
 static BT_Node *findLeafNode(BTreeHandle *tree, int key) {
     BT_Node *current = tree->root;
     int index, fitOn;
@@ -612,6 +626,10 @@ static BT_Node *findLeafNode(BTreeHandle *tree, int key) {
         current = current->children[fitOn];
     }
     return current;
+}
+
+BT_Node *findNodeByKey(BTreeHandle *tree, int key) {
+    return findLeafNode(tree, key);
 }
 
 RC loadBtree(BTreeHandle *tree) {
@@ -839,40 +857,64 @@ static void updateSiblingPointersForSplitting(BT_Node* parent, BT_Node* rightPar
     rightParent->left = parent;
 }
 
-void freeNodes(BT_Node *root) {
+static BT_Node* freeLeafLevel(BT_Node* leaf) {
+    BT_Node* parent = leaf->parent;
+    BT_Node* current = leaf;
+
+    // Free all nodes at current level from left to right
+    while (current != NULL) {
+        BT_Node* next = current->right;
+        destroyBTNode(current);
+        current = next;
+    }
+
+    return parent;
+}
+
+static BT_Node* findLeftmostLeaf(BT_Node* root) {
+    BT_Node* current = root;
+
+    while (current != NULL && !current->isLeaf) {
+        current = current->children[0];
+    }
+
+    return current;
+}
+
+void freeNodes(BT_Node* root) {
     if (root == NULL) {
         return;
     }
 
-    BT_Node *leaf = root;
-    while (!leaf->isLeaf) {
-        leaf = leaf->children[0];
+    // Find the leftmost leaf node
+    BT_Node* currentLeaf = findLeftmostLeaf(root);
+    if (currentLeaf == NULL) {
+        destroyBTNode(root);
+        return;
     }
 
-    BT_Node *parent = leaf->parent;
-    BT_Node *next;
+    BT_Node* currentParent = currentLeaf->parent;
 
+    // Process each level from bottom to top
     while (true) {
-        while (leaf != NULL) {
-            next = leaf->right;
-            destroyBTNode(leaf);
-            leaf = next;
+        // Free all nodes at current level
+        currentLeaf = freeLeafLevel(currentLeaf);
+
+        // Move up to parent level
+        if (currentParent == NULL) {
+            break;  // Reached the top of the tree
         }
 
-        if (parent == NULL) {
-            break;
-        }
-
-        leaf = parent;
-        parent = leaf->parent;
+        currentLeaf = currentParent;
+        currentParent = currentLeaf->parent;
     }
-}
-
-RC initIndexManager(void *mgmtData) {
-    return RC_OK;
 }
 
 RC shutdownIndexManager() {
+    return RC_OK;
+}
+
+RC initIndexManager(void *mgmtData) {
     return RC_OK;
 }
 
@@ -1128,41 +1170,87 @@ static RC insertIntoNonFullNode(BTreeHandle *tree, BT_Node *targetNode, Value *k
     return RC_OK;
 }
 
-static RC splitAndInsertIntoFullNode(BTreeHandle *tree, BT_Node *targetNode, Value *key, RID rid)
-{
-    BT_Node *dividable = createBTNode(tree->size + 1, 1, -1);
-    copyNodeData(dividable, targetNode, 0, targetNode->vals->fill);
+static NodeSplitConfig calculateSplitConfig(int totalElements) {
+    NodeSplitConfig config;
+    config.leftFill = ceil((float)totalElements / 2);
+    config.rightFill = totalElements - config.leftFill;
+    config.totalElements = totalElements;
+    return config;
+}
 
-    int i = saInsert(dividable->vals, key->v.intV);
-    saInsertAt(dividable->leafRIDPages, rid.page, i);
-    saInsertAt(dividable->leafRIDSlots, rid.slot, i);
+static void updateSiblingPointers(BT_Node* leftNode, BT_Node* rightNode) {
+    rightNode->right = leftNode->right;
+    if (rightNode->right != NULL) {
+        rightNode->right->left = rightNode;
+    }
+    leftNode->right = rightNode;
+    rightNode->left = leftNode;
+}
 
-    int lFill = ceil((float)dividable->vals->fill / 2);
-    int rFill = dividable->vals->fill - lFill;
-    BT_Node *rightChild = createBTNode(tree->size, 1, tree->nextPage);
+static BT_Node* prepareTempNode(BTreeHandle* tree, BT_Node* sourceNode, Value* key, RID rid) {
+    BT_Node* tempNode = createBTNode(tree->size + 1, 1, -1);
+    if (tempNode == NULL) {
+        return NULL;
+    }
+
+    // Copy existing data
+    copyNodeData(tempNode, sourceNode, 0, sourceNode->vals->fill);
+
+    // Insert new data
+    int insertIndex = saInsert(tempNode->vals, key->v.intV);
+    saInsertAt(tempNode->leafRIDPages, rid.page, insertIndex);
+    saInsertAt(tempNode->leafRIDSlots, rid.slot, insertIndex);
+
+    return tempNode;
+}
+
+static RC splitAndInsertIntoFullNode(BTreeHandle* tree, BT_Node* targetNode, Value* key, RID rid) {
+    if (tree == NULL || targetNode == NULL || key == NULL) {
+        return RC_ERROR;
+    }
+
+    // Prepare temporary node with all data
+    BT_Node* tempNode = prepareTempNode(tree, targetNode, key, rid);
+    if (tempNode == NULL) {
+        return RC_ERROR;
+    }
+
+    // Calculate split configuration
+    NodeSplitConfig splitConfig = calculateSplitConfig(tempNode->vals->fill);
+
+    // Create right node
+    BT_Node* rightNode = createBTNode(tree->size, 1, tree->nextPage);
+    if (rightNode == NULL) {
+        destroyBTNode(tempNode);
+        return RC_ERROR;
+    }
+
+    // Update tree metadata
     tree->nextPage++;
     tree->numNodes++;
+    tree->numEntries++;
 
-    copyNodeData(targetNode, dividable, 0, lFill);
-    copyNodeData(rightChild, dividable, lFill, rFill);
+    // Perform split
+    copyNodeData(targetNode, tempNode, 0, splitConfig.leftFill);
+    copyNodeData(rightNode, tempNode, splitConfig.leftFill, splitConfig.rightFill);
 
-    destroyBTNode(dividable);
+    // Clean up temporary node
+    destroyBTNode(tempNode);
 
-    rightChild->right = targetNode->right;
-    if (rightChild->right != NULL)
-    {
-        rightChild->right->left = rightChild;
-    }
-    targetNode->right = rightChild;
-    rightChild->left = targetNode;
+    // Update node relationships
+    updateSiblingPointers(targetNode, rightNode);
 
-    writeNode(rightChild, tree);
+    // Write changes to disk
+    writeNode(rightNode, tree);
     writeNode(targetNode, tree);
-    insPropagateParent(tree, targetNode, rightChild, rightChild->vals->elems[0]);
 
-    tree->numEntries = tree->numEntries + 1;
-    writeBtreeHeader(tree);
-    return RC_OK;
+    // Update parent nodes
+    RC result = insPropagateParent(tree, targetNode, rightNode, rightNode->vals->elems[0]);
+    if (result == RC_OK) {
+        writeBtreeHeader(tree);
+    }
+
+    return result;
 }
 
 static void copyNodeData(BT_Node *dest, BT_Node *src, int start, int count)

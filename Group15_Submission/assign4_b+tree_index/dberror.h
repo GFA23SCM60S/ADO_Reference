@@ -58,6 +58,8 @@ typedef int RC;
 #define RC_BT_OPERATION_NOT_SUPPORTED 705
 #define RC_INVALID_PARAMETER 706
 
+#define SA_ELEMENT_NOT_FOUND -1
+
 /* holder for error messages */
 extern char *RC_message;
 
