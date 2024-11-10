@@ -16,6 +16,7 @@ typedef int RC;
 #define RC_BLOCK_POSITION_ERROR 5
 #define RC_FS_ERROR 6
 #define RC_FILE_ALREADY_EXISTS 7
+#define RC_MEM_ALLOCATION_ERROR 12
 
 #define RC_ERROR 400 // Added a new definiton for ERROR
 #define RC_PINNED_PAGES_IN_BUFFER 500 // Added a new definition for Buffer Manager
@@ -48,6 +49,14 @@ typedef int RC;
 // Added new definitions for Record Manager
 #define RC_RM_NO_TUPLE_WITH_GIVEN_RID 600
 #define RC_SCAN_CONDITION_NOT_FOUND 601
+
+#define RC_BT_NODE_NOT_FOUND 700
+#define RC_BT_INVALID_TREE_STRUCTURE 701
+#define RC_BT_DUPLICATE_KEY 702
+#define RC_BT_TREE_FULL 703
+#define RC_BT_INVALID_KEY_TYPE 704
+#define RC_BT_OPERATION_NOT_SUPPORTED 705
+#define RC_INVALID_PARAMETER 706
 
 /* holder for error messages */
 extern char *RC_message;

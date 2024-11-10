@@ -3,10 +3,15 @@
 
 #include "dberror.h"
 #include "tables.h"
+#include "const.h"
 // #include "data_structures.h"
 
 // 1250 * 8KB(PAGE_SIZE is 8196) = 10MB, assuming we will need 10MB for every pool, 1259 is the closest prime number to 1250
 #define HASH_LEN 1259
+
+#define HASH_MULTIPLIER 31
+
+#define MAX_LEVEL 100
 
 // linked list BNode
 typedef struct BNode {
